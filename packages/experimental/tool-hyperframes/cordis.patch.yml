@@ -1,0 +1,8 @@
+# Hyperframes video tool plugin layer. Registers the three video tools
+# (lint, snapshot, render) as an experimental plugin.
+
+- insert:
+    - id: tool-hyperframes
+      name: '@deepseek-ai/dsh-experimental-tool-hyperframes'
+      config:
+        hyperframesCliPath: !!js process.env.HYPERFRAMES_CLI_PATH || 'hyperframes'

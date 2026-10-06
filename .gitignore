@@ -44,3 +44,7 @@ worktrees/
 .agents/worktrees/
 .typert-*/
 native/system/test/bin/
+
+# Hyperframes tool plugin: generated snapshots and renders
+packages/experimental/tool-hyperframes/snapshots/
+packages/experimental/tool-hyperframes/renders/
