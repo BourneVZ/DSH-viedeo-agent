@@ -25,7 +25,8 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@deepseek-ai/schemastery": "workspace:^"
+    "@deepseek-ai/schemastery": "workspace:^",
+    "hyperframes": "^0.8.150"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-tools": "workspace:^",

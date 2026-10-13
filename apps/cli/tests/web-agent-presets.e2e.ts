@@ -225,7 +225,7 @@ describe('the shipped Web composition', () => {
   it('supplies both shipped presets, and only those, from the system root', async () => {
     const listed = await ctx.agentPresets.list()
 
-    expect(listed.map(preset => preset.id).sort()).toEqual(['cordis', 'minimal', 'ptc', 'standard'])
+    expect(listed.map(preset => preset.id).sort()).toEqual(['cordis', 'minimal', 'ptc', 'standard', 'video'])
     expect(listed.every(preset => preset.trust === 'system')).toBe(true)
     expect(ctx.agentPresets.defaultId).toBe('standard')
   })
@@ -248,6 +248,29 @@ describe('the shipped Web composition', () => {
         'workflow', 'write',
       ])
       expect(ctx.commands.find(handle.agent, 'goal')).toBeDefined()
+    } finally {
+      await handle.dispose()
+    }
+  })
+
+  it('composes the video-production agent with its media toolset and persona', async () => {
+    const handle = await ctx.agents.create({
+      sessionId: SessionId('preset-video'),
+      setup: agentCtx => ctx.agentPresets.mount(agentCtx, 'video').then(() => undefined),
+    })
+    try {
+      // The media toolset is the point of this preset: image generation, speech
+      // synthesis, and the three HyperFrames video tools must all reach the
+      // agent's catalog through the preset scope.
+      expect(toolNames(ctx, handle.agent)).toEqual(expect.arrayContaining([
+        'generate_image', 'generate_speech', 'video_lint', 'video_snapshot', 'video_render',
+      ]))
+      // The video persona shadows the deployment coding identity and carries the
+      // three-phase, script.json contract.
+      const assembly = await ctx.systemPrompt.assemble({ scope: handle.agent })
+      const prefix = assembly.sections.find(section => section.name === 'deployment:persona-prefix')
+      expect(prefix?.text).toContain('你是一个视频制作 Agent')
+      expect(prefix?.text).toContain('script.json')
     } finally {
       await handle.dispose()
     }
@@ -959,7 +982,7 @@ describe('a composition that configures its own preset roots', () => {
     ])
 
     const listed = await rootsCtx.agentPresets.list()
-    expect(listed.map(preset => preset.id).sort()).toEqual(['cordis', 'minimal', 'ptc', 'standard', 'team-spec'])
+    expect(listed.map(preset => preset.id).sort()).toEqual(['cordis', 'minimal', 'ptc', 'standard', 'team-spec', 'video'])
     expect(listed.every(preset => preset.broken === undefined)).toBe(true)
     // The shipped root comes first: a configured directory claiming a shipped
     // id is shadowed, never the other way around.
