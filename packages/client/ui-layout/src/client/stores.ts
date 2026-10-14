@@ -7,6 +7,7 @@ import {
   clampWidth, RIGHTBAR_DEFAULT_RATIO, RIGHTBAR_MAX_RATIO, RIGHTBAR_MIN,
   SIDEBAR_AUTO_COLLAPSE, SIDEBAR_DEFAULT, SIDEBAR_MAX, SIDEBAR_MIN,
 } from './columns.ts'
+import type { ShellModeSpec } from './shell-mode.ts'
 
 /**
  * Transient layout preferences. Responsive concessions never rewrite widths;
@@ -40,6 +41,14 @@ type LayoutState = {
   rightbarFullscreen: boolean
   /** Suppress transitions for a fullscreen exit until another geometry action. */
   rightbarInstant: boolean
+  /**
+   * Alternative shell layouts contributed through `ctx.layout`, in registration
+   * order. Empty means the frame renders only the default three-column layout
+   * and no top-bar switch.
+   */
+  shellModes: readonly ShellModeSpec[]
+  /** Selected alternative shell mode id, or null for the default layout. */
+  shellMode: string | null
 }
 
 /**
@@ -53,6 +62,8 @@ type LayoutActions = {
   setRightbar: (draft: LayoutState, px: number) => void
   openRightbar: (draft: LayoutState, track: boolean, fullscreen: boolean) => void
   closeRightbar: (draft: LayoutState) => void
+  replaceShellModes: (draft: LayoutState, modes: readonly ShellModeSpec[]) => void
+  setShellMode: (draft: LayoutState, id: string | null) => void
 }
 
 /**
@@ -75,6 +86,8 @@ export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutAction
       rightbarTrack: false,
       rightbarFullscreen: false,
       rightbarInstant: false,
+      shellModes: [],
+      shellMode: null,
     }),
     actions: {
       setSidebar: (d, px: number) => {
@@ -117,6 +130,15 @@ export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutAction
         d.rightbarShown = false
         d.rightbarTrack = false
         d.rightbarFullscreen = false
+      },
+      replaceShellModes: (d, modes: readonly ShellModeSpec[]) => {
+        d.shellModes = modes
+        // A withdrawn contribution drops the selection: staying on a mode with
+        // no pane definitions would render an empty body.
+        if (d.shellMode !== null && !modes.some(mode => mode.id === d.shellMode)) d.shellMode = null
+      },
+      setShellMode: (d, id: string | null) => {
+        d.shellMode = id
       },
     },
   })

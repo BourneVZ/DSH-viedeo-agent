@@ -166,6 +166,12 @@ flowchart LR
   cfg --> plugin_dsh_base_web_fetch_http
   plugin_dsh_base_tool_web["tool-web<br/>@deepseek-ai/dsh-tool-web"]
   cfg --> plugin_dsh_base_tool_web
+  plugin_dsh_base_tool_image_gen["tool-image-gen<br/>@deepseek-ai/dsh-tool-image-gen"]
+  cfg --> plugin_dsh_base_tool_image_gen
+  plugin_dsh_base_tool_tts["tool-tts<br/>@deepseek-ai/dsh-tool-tts"]
+  cfg --> plugin_dsh_base_tool_tts
+  plugin_dsh_base_tool_hyperframes["tool-hyperframes<br/>@deepseek-ai/dsh-tool-hyperframes"]
+  cfg --> plugin_dsh_base_tool_hyperframes
   plugin_dsh_base_tools["tools<br/>@deepseek-ai/dsh-tools"]
   cfg --> plugin_dsh_base_tools
   plugin_dsh_base_system_prompt["system-prompt<br/>@deepseek-ai/dsh-system-prompt"]
@@ -259,6 +265,9 @@ flowchart LR
 | `web-search-deepseek` | `@deepseek-ai/dsh-web-search-deepseek` |
 | `web-fetch-http` | `@deepseek-ai/dsh-web-fetch-http` |
 | `tool-web` | `@deepseek-ai/dsh-tool-web` |
+| `tool-image-gen` | `@deepseek-ai/dsh-tool-image-gen` |
+| `tool-tts` | `@deepseek-ai/dsh-tool-tts` |
+| `tool-hyperframes` | `@deepseek-ai/dsh-tool-hyperframes` |
 | `tools` | `@deepseek-ai/dsh-tools` |
 | `system-prompt` | `@deepseek-ai/dsh-system-prompt` |
 | `agent-loop` | `@deepseek-ai/dsh-agent-loop` |

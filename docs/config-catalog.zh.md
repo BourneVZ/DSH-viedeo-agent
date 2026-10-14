@@ -952,6 +952,24 @@ export interface Config {
 
 来源：[`packages/host/open-in-app/src/index.ts:50`](../packages/host/open-in-app/src/index.ts)
 
+<a id="deepseek-aidsh-host-video-project"></a>
+
+## `@deepseek-ai/dsh-host-video-project`
+
+需要：`connection` · `fs` · `workspaceRegistry`
+
+```ts config-catalog
+/** Plugin configuration. */
+export interface Config {
+  /** Directory levels walked below each workspace root while looking for `script.json`. */
+  scanDepth?: number
+  /** Inclusive byte ceiling on one `/api/video/media` response. */
+  maxMediaBytes?: number
+}
+```
+
+来源：[`packages/host/video-project/src/index.ts:36`](../packages/host/video-project/src/index.ts)
+
 <a id="deepseek-aidsh-host-webserver"></a>
 
 ## `@deepseek-ai/dsh-host-webserver`
@@ -2817,6 +2835,42 @@ export interface Config {
 
 来源：[`packages/goal/tool-goal/src/index.ts:25`](../packages/goal/tool-goal/src/index.ts)
 
+<a id="deepseek-aidsh-tool-hyperframes"></a>
+
+## `@deepseek-ai/dsh-tool-hyperframes`
+
+需要：`tools` · `systemPrompt`
+
+```ts config-catalog
+/** Configuration for the Hyperframes tool plugin. */
+export interface Config {
+  /** Path to the Hyperframes CLI executable (default: 'hyperframes'). */
+  hyperframesCliPath?: string
+}
+```
+
+来源：[`packages/web/tool-hyperframes/src/index.ts:19`](../packages/web/tool-hyperframes/src/index.ts)
+
+<a id="deepseek-aidsh-tool-image-gen"></a>
+
+## `@deepseek-ai/dsh-tool-image-gen`
+
+需要：`tools`
+
+```ts config-catalog
+/** Plugin configuration. */
+export interface Config {
+  /** Credential reference for the EvoLink API key; defaults to `EVOLINK_API_KEY`. */
+  apiKeyEnv?: string
+  /** EvoLink API base URL; defaults to `https://api.evolink.ai`. */
+  baseURL?: string
+  /** Model identifier; defaults to `z-image-turbo`. */
+  model?: string
+}
+```
+
+来源：[`packages/web/tool-image-gen/src/index.ts:29`](../packages/web/tool-image-gen/src/index.ts)
+
 <a id="deepseek-aidsh-tool-jobs"></a>
 
 ## `@deepseek-ai/dsh-tool-jobs`
@@ -3092,6 +3146,28 @@ export interface Config {
 ```
 
 来源：[`packages/todo/tool-todo/src/index.ts:29`](../packages/todo/tool-todo/src/index.ts)
+
+<a id="deepseek-aidsh-tool-tts"></a>
+
+## `@deepseek-ai/dsh-tool-tts`
+
+需要：`tools`
+
+```ts config-catalog
+/** Plugin configuration. */
+export interface Config {
+  /** Credential reference for the DashScope API key; defaults to `DASHSCOPE_API_KEY`. */
+  apiKeyEnv?: string
+  /** DashScope API base URL; defaults to `https://dashscope.aliyuncs.com`. */
+  baseURL?: string
+  /** Model identifier; defaults to `qwen3-tts-flash`. */
+  model?: string
+  /** Voice used when a call omits one; defaults to `Cherry`. */
+  defaultVoice?: string
+}
+```
+
+来源：[`packages/web/tool-tts/src/index.ts:31`](../packages/web/tool-tts/src/index.ts)
 
 <a id="deepseek-aidsh-tool-web"></a>
 
@@ -3474,6 +3550,7 @@ export interface Config {
 - `@deepseek-ai/dsh-client-ui-tool`（[`packages/client/ui-tool/src/index.ts`](../packages/client/ui-tool/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-trajectory`（[`packages/client/ui-trajectory/src/index.ts`](../packages/client/ui-trajectory/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-user-questions`（[`packages/client/ui-user-questions/src/index.ts`](../packages/client/ui-user-questions/src/index.ts)）
+- `@deepseek-ai/dsh-client-ui-video`（[`packages/client/ui-video/src/index.ts`](../packages/client/ui-video/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-workflow-run`（[`packages/client/ui-workflow-run/src/index.ts`](../packages/client/ui-workflow-run/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-workspace`（[`packages/client/ui-workspace/src/index.ts`](../packages/client/ui-workspace/src/index.ts)）
 - `@deepseek-ai/dsh-command-compact` — 需要 `commands` · `compact`（[`packages/compaction/command-compact/src/index.ts`](../packages/compaction/command-compact/src/index.ts)）
@@ -3530,6 +3607,7 @@ export interface Config {
 - `@deepseek-ai/dsh-spill` — 抽象 `SpillStore`（[`packages/spill/spill/src/index.ts`](../packages/spill/spill/src/index.ts)）
 - `@deepseek-ai/dsh-subprocess` — 抽象 `SubprocessRuntime`（[`packages/subprocess/subprocess/src/index.ts`](../packages/subprocess/subprocess/src/index.ts)）
 - `@deepseek-ai/dsh-workflow` — 抽象 `WorkflowEngine`（[`packages/workflow/workflow/src/index.ts`](../packages/workflow/workflow/src/index.ts)）
+
 ## 库包（无插件入口）
 
 由其他包作为库导入；`cordis.yml` 无法加载它们。
@@ -3583,4 +3661,5 @@ export interface Config {
 - `@deepseek-ai/dsh-util-time`（[`packages/util/time/src/index.ts`](../packages/util/time/src/index.ts)）
 - `@deepseek-ai/dsh-util-values`（[`packages/util/values/src/index.ts`](../packages/util/values/src/index.ts)）
 - `@deepseek-ai/dsh-util-workspace-path`（[`packages/util/workspace-path/src/index.ts`](../packages/util/workspace-path/src/index.ts)）
+- `@deepseek-ai/dsh-video-app`（[`packages/bundle/video-app/src/index.ts`](../packages/bundle/video-app/src/index.ts)）
 - `@deepseek-ai/dsh-win32-process`（[`packages/subprocess/win32-process/src/index.ts`](../packages/subprocess/win32-process/src/index.ts)）

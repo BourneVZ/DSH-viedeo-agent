@@ -64,6 +64,9 @@ import * as ToolTodo from '@deepseek-ai/dsh-tool-todo'
 import * as ToolSubagent from '@deepseek-ai/dsh-tool-subagent'
 import { registerListSubagentModels } from '../packages/subagent/tool-subagent/src/list-models.ts'
 import * as ToolWeb from '@deepseek-ai/dsh-tool-web'
+import * as ToolHyperframes from '@deepseek-ai/dsh-tool-hyperframes'
+import * as ToolImageGen from '@deepseek-ai/dsh-tool-image-gen'
+import * as ToolTts from '@deepseek-ai/dsh-tool-tts'
 import VmWorkflowEngine from '@deepseek-ai/dsh-workflow-worker-thread'
 import * as ToolRalph from '@deepseek-ai/dsh-tool-ralph'
 import * as ToolWorkflow from '@deepseek-ai/dsh-tool-workflow'
@@ -589,6 +592,42 @@ const TOOL_PACKAGES: ToolPackage[] = [
     },
     note:
       'web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-tool-hyperframes',
+    dir: 'tool-hyperframes',
+    source: 'packages/web/tool-hyperframes/src/index.ts',
+    requires: ['ctx.tools', 'ctx.systemPrompt', 'the hyperframes CLI at execution time'],
+    writes: ['tool/call', 'tool/result'],
+    async mount(ctx) {
+      await ctx.plugin(ToolHyperframes)
+    },
+    note:
+      'video_lint, video_snapshot, and video_render shell out to the Hyperframes CLI; the schema harvest registers all three without the CLI, and snapshot grid composition additionally shells to ImageMagick when it is present.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-tool-image-gen',
+    dir: 'tool-image-gen',
+    source: 'packages/web/tool-image-gen/src/index.ts',
+    requires: ['ctx.tools', 'ctx.credentials or the launch environment at execution time'],
+    writes: ['tool/call', 'tool/result'],
+    async mount(ctx) {
+      await ctx.plugin(ToolImageGen)
+    },
+    note:
+      'generate_image creates an EvoLink Z-Image Turbo task and polls it to completion; the schema harvest registers the tool without an API key or network call.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-tool-tts',
+    dir: 'tool-tts',
+    source: 'packages/web/tool-tts/src/index.ts',
+    requires: ['ctx.tools', 'ctx.attachments and ctx.credentials or the launch environment at execution time'],
+    writes: ['tool/call', 'tool/result'],
+    async mount(ctx) {
+      await ctx.plugin(ToolTts)
+    },
+    note:
+      'generate_speech synthesizes audio through DashScope and commits the WAV to the attachment store; the schema harvest registers the tool without a key, network, or attachment backend.',
   },
 ]
 

@@ -9,6 +9,8 @@
  */
 
 import { Context, Service } from '@deepseek-ai/cordis'
+import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
+import z from '@deepseek-ai/schemastery'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { CredentialInfo, CredentialKey, CredentialRecord, CredentialRef } from './types.ts'
 
@@ -112,6 +114,33 @@ export function credentialKeyScope(key: CredentialKey): string {
  */
 export function credentialKeyId(key: CredentialKey): string {
   return key.slice(key.indexOf('/') + 1)
+}
+
+/**
+ * Build the config schema field for a credential reference: a string tagged
+ * with the `credential-ref` renderer role, so configuration surfaces resolve
+ * and redact it as a secret reference rather than as free text.
+ * @param defaultEnv - the environment-variable name the field defaults to.
+ * @returns the schemastery field schema.
+ */
+export function credentialRefSchema(defaultEnv: string): z<string> {
+  return z.string().role('credential-ref').default(defaultEnv)
+}
+
+/**
+ * Resolve one credential reference for a single consumer operation: read it
+ * through the mounted credentials seam, or fall back to the launch environment
+ * when no provider is mounted. Resolution is per call, so a changed credential
+ * reaches the next operation without a restart.
+ * @param ctx - the consuming plugin's context.
+ * @param ref - the reference to resolve.
+ * @returns the non-empty value, or `undefined` when no source carries it.
+ */
+export async function resolveCredentialValue(ctx: Context, ref: CredentialRef): Promise<string | undefined> {
+  const credentials = ctx.get('credentials')
+  if (credentials !== undefined) return (await credentials.resolve(ref))?.value
+  const ambient = launchEnvironmentOf(ctx).get(ref)
+  return ambient !== undefined && ambient.value.length > 0 ? ambient.value : undefined
 }
 
 /** One resolved credential value and the source layer that supplied it. */

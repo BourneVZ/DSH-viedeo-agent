@@ -140,12 +140,10 @@ function validatePresetPlaneSeparation(): string[] {
   const hostFile = 'packages/bundle/base/cordis.patch.yml'
   const overlayFile = 'packages/bundle/web-app/cordis.patch.yml'
   const hostRows = rowIds(hostFile)
-  const overlay = loadEntries(overlayFile)
-  const disabled = new Set<string>()
-  for (const entry of overlay) {
-    if (!isRecord(entry)) continue
-    if (entry.disabled === true && typeof entry.id === 'string') disabled.add(entry.id)
-  }
+  // A literal `disabled: true` mounts nothing on either layer, so such a row is
+  // not one the host composition runs. An `!!js` disabled expression stays
+  // active here: the gate cannot know the host's answer.
+  const disabled = new Set([...literalDisabledIds(hostFile), ...literalDisabledIds(overlayFile)])
   // The overlay's own inserts are host-plane too; its disables take them back out.
   const active = new Set([...hostRows, ...rowIds(overlayFile)].filter(id => !disabled.has(id)))
   for (const file of globSync('packages/preset/agent-presets/presets/*/agent.cordis.yml', { cwd: root })) {
@@ -173,6 +171,28 @@ function loadEntries(file: string): unknown[] {
  * @returns the declared ids.
  */
 function rowIds(file: string): Set<string> {
+  return collectIds(file, value => typeof value.id === 'string' && typeof value.name === 'string' ? value.id : undefined)
+}
+
+/**
+ * Row ids one config file disables with the literal `true`, anywhere in its
+ * entry tree — a bundle patch nests its rows in `insert` lists.
+ * @param file - repository-relative config path.
+ * @returns the disabled ids.
+ */
+function literalDisabledIds(file: string): Set<string> {
+  return collectIds(file, value => value.disabled === true && typeof value.id === 'string' ? value.id : undefined)
+}
+
+/**
+ * Walk one config file's whole entry tree — a bundle patch nests its rows in
+ * `insert` lists and a preset nests them in `isolate` groups — collecting the id
+ * `idOf` returns for each record.
+ * @param file - repository-relative config path.
+ * @param idOf - yields the id a record contributes, or undefined to skip it.
+ * @returns the collected ids.
+ */
+function collectIds(file: string, idOf: (value: Record<string, unknown>) => string | undefined): Set<string> {
   const ids = new Set<string>()
   const walk = (value: unknown): void => {
     if (isUnknownArray(value)) {
@@ -180,7 +200,8 @@ function rowIds(file: string): Set<string> {
       return
     }
     if (!isRecord(value)) return
-    if (typeof value.id === 'string' && typeof value.name === 'string') ids.add(value.id)
+    const id = idOf(value)
+    if (id !== undefined) ids.add(id)
     for (const child of Object.values(value)) walk(child)
   }
   walk(loadEntries(file))

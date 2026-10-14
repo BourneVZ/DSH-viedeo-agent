@@ -1,12 +1,14 @@
 {
-  "name": "@deepseek-ai/dsh-experimental-tool-hyperframes",
-  "description": "Model-facing Hyperframes tools for video project lint, snapshot, and render",
+  "name": "@deepseek-ai/dsh-video-app",
+  "description": "The dsh video-production bundle: the patch layer over dsh-web-app that mounts the video project service and its shell-mode UI, and defaults new sessions to the video preset",
   "version": "0.1.5-alpha.1",
-  "private": true,
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
-    "directory": "packages/experimental/tool-hyperframes"
+    "directory": "packages/bundle/video-app"
   },
   "type": "module",
   "main": "lib/index.js",
@@ -16,26 +18,29 @@
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
+    "./cordis.patch.yml": "./cordis.patch.yml",
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
   "files": [
     "lib/index.js",
+    "cordis.patch.yml",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
   "dependencies": {
-    "@deepseek-ai/schemastery": "workspace:^",
-    "hyperframes": "^0.8.150"
+    "@deepseek-ai/dsh-client-ui-video": "workspace:^",
+    "@deepseek-ai/dsh-host-video-project": "workspace:^"
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh-tools": "workspace:^",
-    "@deepseek-ai/dsh-system-prompt": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^"
   },
   "devDependencies": {
-    "@deepseek-ai/dsh-tools": "workspace:^",
-    "@deepseek-ai/dsh-system-prompt": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^"
   }
 }

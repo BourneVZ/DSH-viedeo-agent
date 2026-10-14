@@ -40,6 +40,9 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-todo` | `todo_write` | `ctx.tools`, `owning Agent session` | `tool/call`, `todo/write`, `tool/result` | - | todo_write is session-owned state; UIs render the latest todo/write event as a checklist. `allowParallelInProgress` is required with no default, so the catalog states its choice: `true`, whose description invites several `in_progress` items. A deployment choosing `false` receives the same tool with a description asking for exactly one active task. |
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`, `ctx.workflowEngine`, `ctx.systemPrompt`, `a calling Agent (exec.agent parents the script children)` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`, `web_search` | `ctx.tools`, `ctx.web`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps. |
+| `@deepseek-ai/dsh-tool-hyperframes` | `video_lint`, `video_render`, `video_snapshot` | `ctx.tools`, `ctx.systemPrompt`, `the hyperframes CLI at execution time` | `tool/call`, `tool/result` | - | video_lint, video_snapshot, and video_render shell out to the Hyperframes CLI; the schema harvest registers all three without the CLI, and snapshot grid composition additionally shells to ImageMagick when it is present. |
+| `@deepseek-ai/dsh-tool-image-gen` | `generate_image` | `ctx.tools`, `ctx.credentials or the launch environment at execution time` | `tool/call`, `tool/result` | - | generate_image creates an EvoLink Z-Image Turbo task and polls it to completion; the schema harvest registers the tool without an API key or network call. |
+| `@deepseek-ai/dsh-tool-tts` | `generate_speech` | `ctx.tools`, `ctx.attachments and ctx.credentials or the launch environment at execution time` | `tool/call`, `tool/result` | - | generate_speech synthesizes audio through DashScope and commits the WAV to the attachment store; the schema harvest registers the tool without a key, network, or attachment backend. |
 
 <a id="deepseek-aidsh-tool-ask-user"></a>
 
@@ -2223,3 +2226,181 @@ Search the web for current information. Provide 1–4 queries in the required qu
 Source: [`packages/web/tool-web/src/index.ts`](../packages/web/tool-web/src/index.ts)
 
 web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps.
+
+<a id="deepseek-aidsh-tool-hyperframes"></a>
+
+## `@deepseek-ai/dsh-tool-hyperframes`
+
+### `video_lint`
+
+Validate a Hyperframes video project for common mistakes such as missing assets, invalid timing, or structural errors. Returns a list of findings with severity levels.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "project_path": {
+      "type": "string",
+      "description": "Absolute path to the Hyperframes project directory"
+    },
+    "verbose": {
+      "type": "boolean",
+      "description": "Show info-level findings (default: false)"
+    }
+  },
+  "required": [
+    "project_path"
+  ]
+}
+```
+
+Source: [`packages/web/tool-hyperframes/src/index.ts`](../packages/web/tool-hyperframes/src/index.ts)
+
+### `video_render`
+
+Render a Hyperframes composition to MP4. Supports quality presets and custom frame rates.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "project_path": {
+      "type": "string",
+      "description": "Absolute path to the Hyperframes project directory"
+    },
+    "output_path": {
+      "type": "string",
+      "description": "Output file path (default: <project>/renders/<name>.mp4)"
+    },
+    "fps": {
+      "type": "number",
+      "description": "Frame rate (default: composition's data-fps or 30)"
+    },
+    "quality": {
+      "type": "string",
+      "description": "Quality preset (default: looks)",
+      "enum": [
+        "draft",
+        "looks",
+        "delivery"
+      ]
+    }
+  },
+  "required": [
+    "project_path"
+  ]
+}
+```
+
+Source: [`packages/web/tool-hyperframes/src/index.ts`](../packages/web/tool-hyperframes/src/index.ts)
+
+### `video_snapshot`
+
+Capture key frames from a Hyperframes composition as PNG screenshots. When multiple time points are provided (up to 9), the tool composes them into a grid image (3 per row). Useful for visual verification at specific moments.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "project_path": {
+      "type": "string",
+      "description": "Absolute path to the Hyperframes project directory"
+    },
+    "time_points": {
+      "type": "array",
+      "description": "Array of timestamps in seconds to capture (max 9). If omitted, uses evenly-spaced frames",
+      "items": {
+        "type": "number"
+      }
+    },
+    "output_path": {
+      "type": "string",
+      "description": "Directory to write snapshots (default: <project>/snapshots)"
+    }
+  },
+  "required": [
+    "project_path"
+  ]
+}
+```
+
+Source: [`packages/web/tool-hyperframes/src/index.ts`](../packages/web/tool-hyperframes/src/index.ts)
+
+video_lint, video_snapshot, and video_render shell out to the Hyperframes CLI; the schema harvest registers all three without the CLI, and snapshot grid composition additionally shells to ImageMagick when it is present.
+
+<a id="deepseek-aidsh-tool-image-gen"></a>
+
+## `@deepseek-ai/dsh-tool-image-gen`
+
+### `generate_image`
+
+Generate an image from a text prompt using the EvoLink Z-Image Turbo model. The tool creates an asynchronous generation task and polls until the image is ready. Returns one or more image URLs on success.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "prompt": {
+      "type": "string",
+      "description": "A detailed text description of the image to generate."
+    },
+    "size": {
+      "type": "string",
+      "description": "Aspect ratio of the generated image. Defaults to 1:1 (square).",
+      "enum": [
+        "1:1",
+        "2:3",
+        "3:2",
+        "3:4",
+        "4:3",
+        "9:16",
+        "16:9",
+        "1:2",
+        "2:1"
+      ]
+    }
+  },
+  "required": [
+    "prompt"
+  ]
+}
+```
+
+Source: [`packages/web/tool-image-gen/src/index.ts`](../packages/web/tool-image-gen/src/index.ts)
+
+generate_image creates an EvoLink Z-Image Turbo task and polls it to completion; the schema harvest registers the tool without an API key or network call.
+
+<a id="deepseek-aidsh-tool-tts"></a>
+
+## `@deepseek-ai/dsh-tool-tts`
+
+### `generate_speech`
+
+Convert text to speech using the Qwen text-to-speech model. Returns a durable audio attachment (a WAV file) plus its temporary provider URL. Specify a voice to control the speaker timbre; common voices include Cherry, Serena, Ethan, and Chelsie.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "text": {
+      "type": "string",
+      "description": "The text to synthesize. Supports multilingual and mixed-language input."
+    },
+    "voice": {
+      "type": "string",
+      "description": "Speaker timbre. Defaults to the configured voice (Cherry) when omitted."
+    },
+    "language": {
+      "type": "string",
+      "description": "Language hint for synthesis. One of Auto, Chinese, English, German, Italian, Portuguese, Spanish, Japanese, Korean, French, Russian. Defaults to Auto."
+    }
+  },
+  "required": [
+    "text"
+  ]
+}
+```
+
+Source: [`packages/web/tool-tts/src/index.ts`](../packages/web/tool-tts/src/index.ts)
+
+generate_speech synthesizes audio through DashScope and commits the WAV to the attachment store; the schema harvest registers the tool without a key, network, or attachment backend.

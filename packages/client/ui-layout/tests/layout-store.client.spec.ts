@@ -18,6 +18,8 @@ describe('createLayoutStore', () => {
       rightbarTrack: false,
       rightbarFullscreen: false,
       rightbarInstant: false,
+      shellModes: [],
+      shellMode: null,
     })
   })
 
@@ -222,5 +224,36 @@ describe('right panel instant geometry', () => {
     actions.closeRightbar()
     actions.openRightbar(true, fullscreen)
     expect(store.getSnapshot()).toMatchObject({ rightbarShown: true, rightbarFullscreen: fullscreen, rightbarInstant: false })
+  })
+})
+
+describe('shell modes', () => {
+  const video = { id: 'video', label: '视频制作', columns: '240px minmax(0, 1fr)', panes: [{ kind: 'pane', pane: 'projects' }, { kind: 'conversation' }] } as const
+  const other = { id: 'other', label: 'Other', columns: 'minmax(0, 1fr)', panes: [{ kind: 'conversation' }] } as const
+
+  it('publishes the contributed modes in order without changing the selection', () => {
+    const { store, actions } = createLayoutStore().create()
+    actions.replaceShellModes([video, other])
+    expect(store.getSnapshot()).toMatchObject({ shellModes: [video, other], shellMode: null })
+    actions.setShellMode('video')
+    expect(store.getSnapshot().shellMode).toBe('video')
+    actions.setShellMode(null)
+    expect(store.getSnapshot().shellMode).toBeNull()
+  })
+
+  it('drops a selection whose contributor withdrew', () => {
+    const { store, actions } = createLayoutStore().create()
+    actions.replaceShellModes([video, other])
+    actions.setShellMode('video')
+    actions.replaceShellModes([other])
+    expect(store.getSnapshot()).toMatchObject({ shellModes: [other], shellMode: null })
+  })
+
+  it('keeps a selection that survives the replacement', () => {
+    const { store, actions } = createLayoutStore().create()
+    actions.replaceShellModes([video, other])
+    actions.setShellMode('other')
+    actions.replaceShellModes([other])
+    expect(store.getSnapshot().shellMode).toBe('other')
   })
 })

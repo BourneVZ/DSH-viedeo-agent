@@ -22,9 +22,6 @@
     },
     {
       "path": "../../credentials/credentials"
-    },
-    {
-      "path": "../../util/launch-environment"
     }
   ]
 }

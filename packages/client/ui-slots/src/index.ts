@@ -613,10 +613,18 @@ export interface StoredEntry {
 /**
  * Resolve a possibly-thunked list label at read time (thunks follow the
  * active locale; owners projecting ledger rows call this instead of reading
- * `options.label` raw).
- * @param label - the stored label.
+ * `options.label` raw). A label the caller knows is present resolves to a
+ * string, so the optionality of the stored form does not leak into it.
+ * @param label - the stored label, known to be present.
+ * @returns the display string.
+ */
+export function resolveSlotLabel(label: SlotLabel): string
+/**
+ * Resolve a possibly-thunked list label the caller cannot prove present.
+ * @param label - the stored label, or undefined when the entry declared none.
  * @returns the display string, or undefined when the entry declared none.
  */
+export function resolveSlotLabel(label: SlotLabel | undefined): string | undefined
 export function resolveSlotLabel(label: SlotLabel | undefined): string | undefined {
   return typeof label === 'function' ? label() : label
 }

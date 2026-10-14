@@ -1,7 +1,7 @@
 /**
  * Model-facing Hyperframes tools for video project lint, snapshot, and render.
  * Delegates to the Hyperframes CLI for all operations.
- * @module @deepseek-ai/dsh-experimental-tool-hyperframes
+ * @module @deepseek-ai/dsh-tool-hyperframes
  */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -105,8 +105,8 @@ function executeCommand(
     let stdout = ''
     let stderr = ''
 
-    child.stdout.on('data', (data) => { stdout += data.toString() })
-    child.stderr.on('data', (data) => { stderr += data.toString() })
+    child.stdout.on('data', (data: Buffer) => { stdout += data.toString() })
+    child.stderr.on('data', (data: Buffer) => { stderr += data.toString() })
 
     child.on('close', (code) => {
       resolve({ exitCode: code ?? 1, stdout, stderr })
@@ -138,20 +138,40 @@ function presentHyperframesResult(result: ToolResult): ToolResultView {
   }
 }
 
+/** Severity levels the Hyperframes linter reports. */
+type LintSeverity = 'error' | 'warning' | 'info'
+
+/** One finding row reported by the Hyperframes linter. */
+interface LintFinding {
+  severity: LintSeverity
+  message: string
+  location?: string
+}
+
+/**
+ * Narrow an untrusted severity string to a known level, treating anything
+ * unrecognized as an error so it is never silently downgraded.
+ * @param value - candidate severity from linter output.
+ * @returns the matching level, or `error`.
+ */
+function severityOf(value: unknown): LintSeverity {
+  return value === 'warning' || value === 'info' ? value : 'error'
+}
+
 /** Parse lint output into structured findings. */
 function parseLintOutput(stdout: string, _stderr: string, exitCode: number): {
   success: boolean
-  findings: Array<{ severity: string; message: string; location?: string }>
+  findings: LintFinding[]
   summary: string
 } {
-  const findings: Array<{ severity: string; message: string; location?: string }> = []
+  const findings: LintFinding[] = []
   const lines = stdout.split('\n').filter(line => line.trim())
 
   for (const line of lines) {
     const match = line.match(/^\[(error|warning|info)\]\s+(.+?)(?:\s+at\s+(.+))?$/)
     if (match?.[1] && match[2]) {
       findings.push({
-        severity: match[1],
+        severity: severityOf(match[1]),
         message: match[2],
         ...match[3] ? { location: match[3] } : {},
       })
@@ -169,6 +189,35 @@ function parseLintOutput(stdout: string, _stderr: string, exitCode: number): {
       ? `Lint passed with ${warningCount} warning(s)`
       : `Lint failed: ${errorCount} error(s), ${warningCount} warning(s)`,
   }
+}
+
+/**
+ * Narrow parsed `hyperframes lint --json` output into finding rows. The CLI
+ * emits either a bare array of findings or an object carrying a `findings`
+ * array; any other payload yields no findings.
+ * @param json parsed JSON text from the lint command.
+ * @returns the recognized finding rows.
+ */
+function lintFindingsOf(json: unknown): LintFinding[] {
+  const rows: unknown = Array.isArray(json)
+    ? json
+    : isPlainObject(json) ? json.findings : undefined
+  if (!Array.isArray(rows)) return []
+  const findings: LintFinding[] = []
+  for (const row of rows) {
+    if (!isPlainObject(row)) continue
+    findings.push({
+      severity: severityOf(row.severity),
+      message: typeof row.message === 'string' ? row.message : 'Unknown issue',
+      ...typeof row.location === 'string' ? { location: row.location } : {},
+    })
+  }
+  return findings
+}
+
+/** Type guard for a non-array object record. */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 export function apply(ctx: Context, config: Config = {}): void {
@@ -213,15 +262,10 @@ export function apply(ctx: Context, config: Config = {}): void {
         let lintResult
         if (result.stdout.trim().startsWith('[') || result.stdout.trim().startsWith('{')) {
           try {
-            const json = JSON.parse(result.stdout)
-            const findings = Array.isArray(json) ? json : json.findings ?? []
+            const findings = lintFindingsOf(JSON.parse(result.stdout) as unknown)
             lintResult = {
               success: result.exitCode === 0,
-              findings: findings.map((f: { severity?: string; message?: string; location?: string }) => ({
-                severity: f.severity ?? 'error',
-                message: f.message ?? 'Unknown issue',
-                ...f.location ? { location: f.location } : {},
-              })),
+              findings,
               summary: result.exitCode === 0
                 ? `Lint passed with ${findings.length} finding(s)`
                 : `Lint failed with ${findings.length} finding(s)`,

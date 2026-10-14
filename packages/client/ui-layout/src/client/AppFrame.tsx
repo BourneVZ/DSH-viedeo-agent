@@ -14,6 +14,12 @@
  * shown/track/fullscreen through `ctx.layout`; fullscreen keeps the reported
  * track but hides the outer resize handle. Everything arrives through the framework
  * shares — zero cordis or framework imports, zero self-made hooks.
+ *
+ * The frame is one of two bodies under the shell: a feature that contributes an
+ * alternative shell mode through `ctx.layout.registerShellMode` adds a top-bar
+ * switch, and selecting that mode replaces the whole three-column body with the
+ * contributor's pane grid. The shell stays the measured box and the anchor of
+ * the frame-wide overlay layer, so both survive a mode switch.
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -22,13 +28,14 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-slots'
 import { computeColumns, RIGHTBAR_DEFAULT_RATIO, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_DEFAULT } from './columns.ts'
 import { DocumentTitle } from './DocumentTitle.tsx'
+import { ShellModeSwitch } from './ShellModeSwitch.tsx'
 import type { createLayoutStore } from './stores.ts'
 import css from './AppFrame.module.css'
 
 /** Full composed props: runtime share + child-slot render share + store share. */
 export type AppFrameProps =
   & PropsRuntime<'root'>
-  & PropsRenderSlots<'sidebar' | 'conversation' | 'rightbar' | 'shell.overlay'>
+  & PropsRenderSlots<'sidebar' | 'conversation' | 'rightbar' | 'shell.overlay' | 'shell.mode.pane'>
   & PropsStore<ReturnType<typeof createLayoutStore>>
   & PropsLocale<'common'>
 
@@ -129,10 +136,12 @@ export function AppFrame({
   const frameRef = useRef<HTMLDivElement | null>(null)
   const viewport = panels.viewportWidth
 
-  // Track the frame's own box (not the window): rAF-throttled ResizeObserver.
+  // Track the shell's own box (not the window): rAF-throttled ResizeObserver.
+  // The shell spans the same width as the frame in either body, so the measured
+  // value keeps its frame-width meaning and the observer survives a mode switch.
   useLayoutEffect(() => {
     const el = frameRef.current
-    /* v8 ignore next -- the ref is always attached by effect time: the frame div renders unconditionally. */
+    /* v8 ignore next -- the ref is always attached by effect time: the shell div renders unconditionally. */
     if (el === null) return
     let raf: number | null = null
     let disposed = false
@@ -189,60 +198,93 @@ export function AppFrame({
     actions.setRightbar(rightbarBase.current - dx)
   }, [actions])
   const productTitle = process.env.DSH_CLIENT_TITLE ?? t('brand.localBuild')
+  // The selected alternative mode, or null for the default three-column frame.
+  // A selection whose contributor withdrew resolves to null in the store.
+  const mode = panels.shellMode === null
+    ? null
+    : panels.shellModes.find(candidate => candidate.id === panels.shellMode) ?? null
 
   return (
-    <div
-      ref={frameRef}
-      className={css.frame}
-      style={{
-        gridTemplateColumns:
-          `${cols.sidebar}px minmax(0, 1fr) ${cols.rightbar}px`,
-      }}
-      data-sidebar-collapsed={sidebarCollapsed || undefined}
-      data-rightbar-collapsed={cols.rightbar === 0 || undefined}
-      data-rightbar-fullscreen={panels.rightbarFullscreen || undefined}
-      data-rightbar-instant={panels.rightbarInstant || undefined}
-      data-dragging={dragging || undefined}
-    >
+    <div className={css.shell} ref={frameRef} data-shell data-shell-mode={mode?.id}>
       <DocumentTitle
         productTitle={productTitle}
         {...documentTitle === undefined ? {} : { title: documentTitle }}
       />
-      <div className={css.sidebarCol}>
-        {/* Render-site slot call with live concession output: a closed
-            sidebar keeps the mounted slot at the compact-rail width, and the
-            component sees its rendered state as owner params decided here
-            (collapsed follows the resolved rail, so a derived auto-collapse
-            renders the rail UI too). */}
-        {renderSlot('sidebar', {
-          collapsed: sidebarCollapsed,
-          width: cols.sidebar,
-        })}
-      </div>
-      <>
-        {/* Both column occupants stay at fixed tree positions from first
-            paint — no loading gate: a bare status line reads worse than
-            the shell's own pending rendering. The conversation is
-            session-maybe; SessionProvider withholds the strict right-column
-            entry while no session is current. */}
-        <CenterColumn>{renderSlot('conversation', {})}</CenterColumn>
-        <RightbarColumn>
-          {/* Strict session entry: with no session there is no surface, and the
-              column is an empty zero-width track. The occupant receives the
-              panel width it should draw at; the track is the frame's business. */}
-          <SessionProvider>
-            {renderSlot('rightbar', { width: normal.rightbar, viewportWidth: viewport, canShow: normal.rightbar > 0 })}
-          </SessionProvider>
-        </RightbarColumn>
-      </>
+      {panels.shellModes.length > 0 && (
+        <div className={css.topbar}>
+          <ShellModeSwitch
+            modes={panels.shellModes}
+            selected={panels.shellMode}
+            onSelect={actions.setShellMode}
+            t={t}
+          />
+        </div>
+      )}
+      {mode === null ? (
+        <div
+          className={css.frame}
+          style={{
+            gridTemplateColumns:
+              `${cols.sidebar}px minmax(0, 1fr) ${cols.rightbar}px`,
+          }}
+          data-sidebar-collapsed={sidebarCollapsed || undefined}
+          data-rightbar-collapsed={cols.rightbar === 0 || undefined}
+          data-rightbar-fullscreen={panels.rightbarFullscreen || undefined}
+          data-rightbar-instant={panels.rightbarInstant || undefined}
+          data-dragging={dragging || undefined}
+        >
+          <div className={css.sidebarCol}>
+            {/* Render-site slot call with live concession output: a closed
+                sidebar keeps the mounted slot at the compact-rail width, and the
+                component sees its rendered state as owner params decided here
+                (collapsed follows the resolved rail, so a derived auto-collapse
+                renders the rail UI too). */}
+            {renderSlot('sidebar', {
+              collapsed: sidebarCollapsed,
+              width: cols.sidebar,
+            })}
+          </div>
+          <>
+            {/* Both column occupants stay at fixed tree positions from first
+                paint — no loading gate: a bare status line reads worse than
+                the shell's own pending rendering. The conversation is
+                session-maybe; SessionProvider withholds the strict right-column
+                entry while no session is current. */}
+            <CenterColumn>{renderSlot('conversation', {})}</CenterColumn>
+            <RightbarColumn>
+              {/* Strict session entry: with no session there is no surface, and the
+                  column is an empty zero-width track. The occupant receives the
+                  panel width it should draw at; the track is the frame's business. */}
+              <SessionProvider>
+                {renderSlot('rightbar', { width: normal.rightbar, viewportWidth: viewport, canShow: normal.rightbar > 0 })}
+              </SessionProvider>
+            </RightbarColumn>
+          </>
+          {/* The collapsed rail is fixed-width: no resize handle while closed. */}
+          {!sidebarCollapsed && <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
+          {panels.rightbarShown && !panels.rightbarFullscreen && normal.rightbar > 0 && (
+            <DragHandle side="rightbar" left={viewport - normal.rightbar} onStart={onRightbarStart} onDrag={onRightbarDrag} onEnd={onDragEnd} />
+          )}
+        </div>
+      ) : (
+        <div className={css.modeBody} style={{ gridTemplateColumns: mode.columns }}>
+          {/* Each pane is a grid track the contributor sized through its own
+              `columns`; a conversation pane re-renders the frame's own
+              session-maybe surface here, and a named pane dispatches into the
+              keyed seat the feature registers. Only one body renders at a time,
+              so the conversation slot never mounts twice. */}
+          {mode.panes.map((pane, index) => (
+            <div key={pane.kind === 'conversation' ? 'conversation' : pane.pane} className={css.modePane} data-pane-index={index}>
+              {pane.kind === 'conversation'
+                ? renderSlot('conversation', {})
+                : renderSlot('shell.mode.pane', {}, { entryKey: pane.pane })}
+            </div>
+          ))}
+        </div>
+      )}
       <div className={css.overlayLayer} data-shell-overlay>
         {renderSlot('shell.overlay', {})}
       </div>
-      {/* The collapsed rail is fixed-width: no resize handle while closed. */}
-      {!sidebarCollapsed && <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
-      {panels.rightbarShown && !panels.rightbarFullscreen && normal.rightbar > 0 && (
-        <DragHandle side="rightbar" left={viewport - normal.rightbar} onStart={onRightbarStart} onDrag={onRightbarDrag} onEnd={onDragEnd} />
-      )}
     </div>
   )
 }

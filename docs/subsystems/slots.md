@@ -164,8 +164,11 @@ root
 │  │  └─ sidebar.right.tab.guide
 │  ├─ sidebar.right.pane.tab.title
 │  └─ sidebar.right.tab.menu.item
+├─ shell.mode.pane
 └─ shell.overlay
 ```
+
+`shell.mode.pane` is a root-scoped keyed slot the frame declares for alternative shell modes. A feature plugin registers one mode through `ctx.layout.registerShellMode`; while that mode is selected, the frame replaces the three-column grid with the mode's own pane row and renders each named pane through `shell.mode.pane`, dispatched by the pane key the mode spec names. A mode's `conversation` pane re-renders the frame's own `conversation` slot instead, so the real session surface is reused rather than restaged. The slot is live only while a mode body renders, so a feature fills it with `ctx.slots.inject`. [`dsh-client-ui-video`](../../packages/client/ui-video/README.md) is the shipped occupant, registering the `projects` and `preview` panes.
 
 The generated Client inspect catalog is the exhaustive contract for each key: cardinality, scope, owner props, standard props, current occupants, declaration owner, and replacement risk. A running dynamic package can query the live tree and an exact key with `cordis_inspect what:"client"`; the source catalog is generated from `SlotMap` declarations and `slots.register()` call sites by `pnpm run gen-client-catalog`.
 

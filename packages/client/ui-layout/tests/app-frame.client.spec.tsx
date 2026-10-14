@@ -2,12 +2,13 @@
 /** Frame interactions with a real store and explicitly driven browser measurements. */
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { useSyncExternalStore } from 'react'
 import { AppFrame } from '../src/client/AppFrame.tsx'
 import type { AppFrameProps } from '../src/client/AppFrame.tsx'
 import type { RightbarOwnerProps, SidebarOwnerProps } from '../src/client/index.ts'
 import { createLayoutStore } from '../src/client/stores.ts'
+import css from '../src/client/AppFrame.module.css'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -70,10 +71,11 @@ function hookOf<T>(inst: { subscribe: (fn: () => void) => () => void; getSnapsho
 function mountFrame(windowWidth = frameWidth) {
   vi.stubGlobal('innerWidth', windowWidth)
   const instance = createLayoutStore().create()
-  const slotCalls: { key: string; props: object }[] = []
-  const renderSlot = ((key: string, owner: object) => {
-    slotCalls.push({ key, props: owner })
-    return <div data-testid={`${key}-content`} />
+  const slotCalls: { key: string; props: object; entryKey?: string }[] = []
+  const renderSlot = ((key: string, owner: object, opts?: { entryKey?: string }) => {
+    slotCalls.push({ key, props: owner, ...(opts?.entryKey === undefined ? {} : { entryKey: opts.entryKey }) })
+    const testId = opts?.entryKey === undefined ? key : `${key}:${opts.entryKey}`
+    return <div data-testid={`${testId}-content`} />
   }) as AppFrameProps['renderSlot']
   const useSessions = ((sel: (s: SessionListState) => unknown) => sel({
     ids: selectedSession === undefined ? [] : [selectedSession],
@@ -105,13 +107,26 @@ function mountFrame(windowWidth = frameWidth) {
     />
   )
   const utils = render(element())
-  const frame = utils.container.firstElementChild as HTMLElement
+  // The shell is the mounted root; the three-column frame is its default body.
+  const shell = utils.container.firstElementChild as HTMLElement
+  const frame = requireFrame(shell)
   return {
-    ...utils, instance, frame, slotCalls,
+    ...utils, instance, shell, frame, slotCalls,
+    frameNow: () => requireFrame(shell),
     rerenderFrame: () => { utils.rerender(element()) },
     rightOwner: () => slotCalls.findLast(c => c.key === 'rightbar')!.props as RightbarOwnerProps,
     sidebarOwner: () => slotCalls.findLast(c => c.key === 'sidebar')!.props as SidebarOwnerProps,
   }
+}
+
+const frameClass = css.frame
+if (frameClass === undefined) throw new Error('frame class missing from AppFrame.module.css')
+
+/** The default three-column body, absent while an alternative shell mode is selected. */
+function requireFrame(shell: HTMLElement): HTMLElement {
+  const frame = shell.querySelector<HTMLElement>(`.${frameClass}`)
+  if (frame === null) throw new Error('default frame not rendered')
+  return frame
 }
 
 function tracks(frame: HTMLElement): number[] {
@@ -570,5 +585,74 @@ describe('AppFrame frame measurement lifecycle', () => {
     act(() => { observer.fire(); flushFrames() })
     expect(instance.getSnapshot().viewportWidth).toBe(1920)
     expect(animationFrames.size).toBe(0)
+  })
+})
+
+describe('AppFrame shell modes', () => {
+  const videoMode = {
+    id: 'video',
+    label: '视频制作',
+    columns: '240px minmax(0, 1fr) 420px',
+    panes: [
+      { kind: 'pane', pane: 'projects' },
+      { kind: 'conversation' },
+      { kind: 'pane', pane: 'preview' },
+    ],
+  } as const
+
+  function tabs(utils: ReturnType<typeof mountFrame>): HTMLElement[] {
+    return utils.queryAllByRole('tab')
+  }
+
+  it('renders no switch while no alternative mode was contributed', () => {
+    const { queryByRole, frame } = mountFrame()
+    expect(queryByRole('tablist')).toBeNull()
+    expect(tracks(frame)).toEqual([280, 0])
+  })
+
+  it('replaces the frame with the declared pane grid and mounts the conversation once', () => {
+    const utils = mountFrame()
+    act(() => { utils.instance.actions.replaceShellModes([videoMode]) })
+    expect(tabs(utils).map(tab => tab.textContent)).toEqual(['shellMode.default', '视频制作'])
+    expect(tracks(utils.frameNow())).toEqual([280, 0])
+
+    act(() => { fireEvent.click(tabs(utils)[1]!) })
+    expect(utils.shell.dataset.shellMode).toBe('video')
+    expect(utils.shell.querySelector(`.${frameClass}`)).toBeNull()
+    const panes = utils.shell.querySelectorAll<HTMLElement>('[data-pane-index]')
+    expect(panes).toHaveLength(3)
+    expect(panes[0]!.parentElement!.style.gridTemplateColumns).toBe(videoMode.columns)
+    expect([...panes].map(pane => pane.dataset.paneIndex)).toEqual(['0', '1', '2'])
+    expect(utils.getByTestId('shell.mode.pane:projects-content')).toBeTruthy()
+    expect(utils.getByTestId('shell.mode.pane:preview-content')).toBeTruthy()
+    // The conversation surface renders at the mode's own position, exactly once.
+    expect(utils.container.querySelectorAll('[data-testid="conversation-content"]')).toHaveLength(1)
+    // The default frame's occupants go with it.
+    expect(utils.queryByTestId('sidebar-content')).toBeNull()
+
+    act(() => { fireEvent.click(tabs(utils)[0]!) })
+    expect(utils.shell.dataset.shellMode).toBeUndefined()
+    expect(tracks(utils.frameNow())).toEqual([280, 0])
+    expect(utils.queryByTestId('shell.mode.pane:projects-content')).toBeNull()
+  })
+
+  it('returns to the default frame when the selected mode is withdrawn', () => {
+    const utils = mountFrame()
+    act(() => { utils.instance.actions.replaceShellModes([videoMode]); utils.instance.actions.setShellMode('video') })
+    expect(utils.shell.dataset.shellMode).toBe('video')
+    act(() => { utils.instance.actions.replaceShellModes([]) })
+    expect(utils.queryByRole('tablist')).toBeNull()
+    expect(tracks(utils.frameNow())).toEqual([280, 0])
+  })
+
+  it('keeps measuring the shell across a mode switch', () => {
+    const utils = mountFrame()
+    act(() => { utils.instance.actions.replaceShellModes([videoMode]); utils.instance.actions.setShellMode('video') })
+    expect(utils.shell.querySelector(`.${frameClass}`)).toBeNull()
+    resize(1200)
+    expect(utils.instance.getSnapshot().viewportWidth).toBe(1200)
+    act(() => { utils.instance.actions.setShellMode(null) })
+    expect(tracks(utils.frameNow())).toEqual([280, 0])
+    expect(utils.instance.getSnapshot().viewportWidth).toBe(1200)
   })
 })

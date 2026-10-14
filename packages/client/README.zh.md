@@ -75,6 +75,7 @@ kind: "package-group"
 | [`ui-directory-picker-browse/`](ui-directory-picker-browse/README.zh.md) | 面向工作区目录流程的应用内目录浏览界面 | — |
 | [`ui-directory-picker-native/`](ui-directory-picker-native/README.zh.md) | 驱动宿主 OS 选择器的原生目录选择界面 | — |
 | [`ui-open-in-app/`](ui-open-in-app/README.zh.md) | 在已安装应用中打开 workspace 目录的会话头部分体按钮 | — |
+| [`ui-video/`](ui-video/README.zh.md) | 视频制作 shell 模式：项目列表与分镜预览排列在对话旁 | — |
 
 -----
 

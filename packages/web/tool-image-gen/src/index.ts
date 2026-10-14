@@ -8,8 +8,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { credentialRef } from '@deepseek-ai/dsh-credentials'
-import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
+import { credentialRef, credentialRefSchema, resolveCredentialValue } from '@deepseek-ai/dsh-credentials'
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'tool-image-gen'
@@ -37,7 +36,7 @@ export interface Config {
 }
 
 export const Config: z<Config> = z.object({
-  apiKeyEnv: z.string().role('credential-ref').default(DEFAULT_API_KEY_ENV),
+  apiKeyEnv: credentialRefSchema(DEFAULT_API_KEY_ENV),
   baseURL: z.string().default(DEFAULT_BASE_URL),
   model: z.string().default(DEFAULT_MODEL),
 })
@@ -51,20 +50,6 @@ interface TaskDetailResponse {
   status: string
   results?: string[]
   error?: { message?: string }
-}
-
-/**
- * Resolve the EvoLink API key through the credential seam, falling back to the
- * launch environment when the seam is unavailable.
- * @param ctx - plugin context.
- * @param apiKeyEnv - branded credential reference.
- * @returns the resolved key, or `undefined` when no source carries it.
- */
-async function resolveApiKey(ctx: Context, apiKeyEnv: ReturnType<typeof credentialRef>): Promise<string | undefined> {
-  const credentials = ctx.get('credentials')
-  if (credentials !== undefined) return (await credentials.resolve(apiKeyEnv))?.value
-  const ambient = launchEnvironmentOf(ctx).get(apiKeyEnv)
-  return ambient !== undefined && ambient.value.length > 0 ? ambient.value : undefined
 }
 
 /**
@@ -183,7 +168,7 @@ export function apply(ctx: Context, config: Config): void {
       }],
     },
     async execute(args, exec) {
-      const apiKey = await resolveApiKey(ctx, apiKeyEnv)
+      const apiKey = await resolveCredentialValue(ctx, apiKeyEnv)
       if (apiKey === undefined) {
         throw new Error(
           `EvoLink API key not found. Set ${config.apiKeyEnv ?? DEFAULT_API_KEY_ENV} in .env or credentials.`,

@@ -31,6 +31,8 @@ export const en = {
   'expand': 'Expand',
   'back': 'Back',
   'brand.localBuild': 'DSH Local Build',
+  'shellMode.default': 'Default',
+  'shellMode.switch': 'Shell mode',
   'unknown': 'Unknown',
   'none': 'None',
   'truncated': 'Truncated',

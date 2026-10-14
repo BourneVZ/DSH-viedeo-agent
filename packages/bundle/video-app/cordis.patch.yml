@@ -1,0 +1,29 @@
+# The dsh-video-app bundle patch: the video-production surface over the
+# dsh-web-app layer. Applied after dsh-base and dsh-web-app; rows here override
+# earlier rows by id, with the profile's own cordis.patch.yml and any --patch
+# overlays still to come.
+#
+# A patch replaces the targeted row's whole `config`, so each row below
+# restates every key it owns.
+
+- insert:
+    # The video project service: scans every registered workspace for
+    # HyperFrames projects and serves their script, media, and render over
+    # /api/video/*. It rides the webapp's connection, fs, and workspace
+    # registry, so it inherits that layer's trust fence and browser cookie
+    # authentication.
+    - id: video-project
+      name: '@deepseek-ai/dsh-host-video-project'
+
+    # The video shell mode: the project roster and shot preview panes, mounted
+    # beside the conversation pane the ui-layout alternative mode reuses.
+    - id: ui-video
+      name: '@deepseek-ai/dsh-client-ui-video'
+
+# A session created in this profile composes the video-production agent. The
+# default only fills an unset choice, so a session already pinned to a preset
+# keeps it, and a default the user stored through the settings surface still
+# wins over this row.
+- id: agent-presets
+  config:
+    default: video

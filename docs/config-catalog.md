@@ -950,6 +950,24 @@ export interface Config {
 
 Source: [`packages/host/open-in-app/src/index.ts:50`](../packages/host/open-in-app/src/index.ts)
 
+<a id="deepseek-aidsh-host-video-project"></a>
+
+## `@deepseek-ai/dsh-host-video-project`
+
+Requires: `connection` · `fs` · `workspaceRegistry`
+
+```ts config-catalog
+/** Plugin configuration. */
+export interface Config {
+  /** Directory levels walked below each workspace root while looking for `script.json`. */
+  scanDepth?: number
+  /** Inclusive byte ceiling on one `/api/video/media` response. */
+  maxMediaBytes?: number
+}
+```
+
+Source: [`packages/host/video-project/src/index.ts:36`](../packages/host/video-project/src/index.ts)
+
 <a id="deepseek-aidsh-host-webserver"></a>
 
 ## `@deepseek-ai/dsh-host-webserver`
@@ -2815,6 +2833,42 @@ export interface Config {
 
 Source: [`packages/goal/tool-goal/src/index.ts:25`](../packages/goal/tool-goal/src/index.ts)
 
+<a id="deepseek-aidsh-tool-hyperframes"></a>
+
+## `@deepseek-ai/dsh-tool-hyperframes`
+
+Requires: `tools` · `systemPrompt`
+
+```ts config-catalog
+/** Configuration for the Hyperframes tool plugin. */
+export interface Config {
+  /** Path to the Hyperframes CLI executable (default: 'hyperframes'). */
+  hyperframesCliPath?: string
+}
+```
+
+Source: [`packages/web/tool-hyperframes/src/index.ts:19`](../packages/web/tool-hyperframes/src/index.ts)
+
+<a id="deepseek-aidsh-tool-image-gen"></a>
+
+## `@deepseek-ai/dsh-tool-image-gen`
+
+Requires: `tools`
+
+```ts config-catalog
+/** Plugin configuration. */
+export interface Config {
+  /** Credential reference for the EvoLink API key; defaults to `EVOLINK_API_KEY`. */
+  apiKeyEnv?: string
+  /** EvoLink API base URL; defaults to `https://api.evolink.ai`. */
+  baseURL?: string
+  /** Model identifier; defaults to `z-image-turbo`. */
+  model?: string
+}
+```
+
+Source: [`packages/web/tool-image-gen/src/index.ts:29`](../packages/web/tool-image-gen/src/index.ts)
+
 <a id="deepseek-aidsh-tool-jobs"></a>
 
 ## `@deepseek-ai/dsh-tool-jobs`
@@ -3090,6 +3144,28 @@ export interface Config {
 ```
 
 Source: [`packages/todo/tool-todo/src/index.ts:29`](../packages/todo/tool-todo/src/index.ts)
+
+<a id="deepseek-aidsh-tool-tts"></a>
+
+## `@deepseek-ai/dsh-tool-tts`
+
+Requires: `tools`
+
+```ts config-catalog
+/** Plugin configuration. */
+export interface Config {
+  /** Credential reference for the DashScope API key; defaults to `DASHSCOPE_API_KEY`. */
+  apiKeyEnv?: string
+  /** DashScope API base URL; defaults to `https://dashscope.aliyuncs.com`. */
+  baseURL?: string
+  /** Model identifier; defaults to `qwen3-tts-flash`. */
+  model?: string
+  /** Voice used when a call omits one; defaults to `Cherry`. */
+  defaultVoice?: string
+}
+```
+
+Source: [`packages/web/tool-tts/src/index.ts:31`](../packages/web/tool-tts/src/index.ts)
 
 <a id="deepseek-aidsh-tool-web"></a>
 
@@ -3472,6 +3548,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-client-ui-tool` ([`packages/client/ui-tool/src/index.ts`](../packages/client/ui-tool/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-trajectory` ([`packages/client/ui-trajectory/src/index.ts`](../packages/client/ui-trajectory/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-user-questions` ([`packages/client/ui-user-questions/src/index.ts`](../packages/client/ui-user-questions/src/index.ts))
+- `@deepseek-ai/dsh-client-ui-video` ([`packages/client/ui-video/src/index.ts`](../packages/client/ui-video/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-workflow-run` ([`packages/client/ui-workflow-run/src/index.ts`](../packages/client/ui-workflow-run/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-workspace` ([`packages/client/ui-workspace/src/index.ts`](../packages/client/ui-workspace/src/index.ts))
 - `@deepseek-ai/dsh-command-compact` — requires `commands` · `compaction` ([`packages/compaction/command-compact/src/index.ts`](../packages/compaction/command-compact/src/index.ts))
@@ -3582,4 +3659,5 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 - `@deepseek-ai/dsh-util-time` ([`packages/util/time/src/index.ts`](../packages/util/time/src/index.ts))
 - `@deepseek-ai/dsh-util-values` ([`packages/util/values/src/index.ts`](../packages/util/values/src/index.ts))
 - `@deepseek-ai/dsh-util-workspace-path` ([`packages/util/workspace-path/src/index.ts`](../packages/util/workspace-path/src/index.ts))
+- `@deepseek-ai/dsh-video-app` ([`packages/bundle/video-app/src/index.ts`](../packages/bundle/video-app/src/index.ts))
 - `@deepseek-ai/dsh-win32-process` ([`packages/subprocess/win32-process/src/index.ts`](../packages/subprocess/win32-process/src/index.ts))

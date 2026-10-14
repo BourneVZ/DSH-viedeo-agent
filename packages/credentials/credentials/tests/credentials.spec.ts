@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { credentialRef, isCredentialKeySegment } from '../src/index.ts'
+import { createLaunchEnvironmentSnapshot, DSH_LAUNCH_ENVIRONMENT_KEY } from '@deepseek-ai/dsh-launch-environment'
+import { credentialRef, credentialRefSchema, isCredentialKeySegment, resolveCredentialValue } from '../src/index.ts'
 import type { CredentialRef } from '../src/index.ts'
 import { MemoryCredentials } from './memory.ts'
 
@@ -80,5 +81,43 @@ describe('the credentials seam through the memory provider', () => {
     expect(ctx.get('credentials')).toBeDefined()
     await fiber.dispose()
     expect(ctx.get('credentials')).toBeUndefined()
+  })
+})
+
+describe('credentialRefSchema', () => {
+  it('tags a config string as a credential reference carrying a default env name', () => {
+    const field = credentialRefSchema('MY_API_KEY')
+    expect(field.meta.role).toBe('credential-ref')
+    expect(field.meta.default).toBe('MY_API_KEY')
+  })
+})
+
+describe('resolveCredentialValue', () => {
+  it('reads through the mounted credentials seam', async () => {
+    const ctx = await boot({ DEEPSEEK_API_KEY: 'sk-seeded' })
+    expect(await resolveCredentialValue(ctx, REF)).toBe('sk-seeded')
+  })
+
+  it('treats an unconfigured reference as absent while the seam is mounted', async () => {
+    const ctx = await boot({ DEEPSEEK_API_KEY: '' })
+    expect(await resolveCredentialValue(ctx, REF)).toBeUndefined()
+  })
+
+  function launchOnly(values: Record<string, string>): Context {
+    const ctx = new Context()
+    ctx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, createLaunchEnvironmentSnapshot([{ source: 'process', values }]))
+    return ctx
+  }
+
+  it('falls back to the launch environment when no provider is mounted', async () => {
+    expect(await resolveCredentialValue(launchOnly({ DEEPSEEK_API_KEY: 'env-val' }), REF)).toBe('env-val')
+  })
+
+  it('treats an empty launch-environment value as absent', async () => {
+    expect(await resolveCredentialValue(launchOnly({ DEEPSEEK_API_KEY: '' }), REF)).toBeUndefined()
+  })
+
+  it('returns undefined when neither the seam nor the launch environment carries it', async () => {
+    expect(await resolveCredentialValue(launchOnly({}), REF)).toBeUndefined()
   })
 })

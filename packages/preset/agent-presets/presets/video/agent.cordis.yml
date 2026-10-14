@@ -219,7 +219,7 @@
     apiKeyEnv: DASHSCOPE_API_KEY
 
 - id: tool-hyperframes
-  name: '@deepseek-ai/dsh-experimental-tool-hyperframes'
+  name: '@deepseek-ai/dsh-tool-hyperframes'
   config:
     hyperframesCliPath: !!js process.env.HYPERFRAMES_CLI_PATH || 'hyperframes'
 

@@ -465,11 +465,11 @@
       config:
         apiKeyEnv: DASHSCOPE_API_KEY
 
-    # Experimental Hyperframes video tools: lint, snapshot, and render for
-    # Hyperframes composition projects. Disabled by default; enable through
-    # settings or set HYPERFRAMES_CLI_PATH to override the CLI path.
+    # Hyperframes video tools: lint, snapshot, and render for Hyperframes
+    # composition projects. Disabled by default; enable through settings or set
+    # HYPERFRAMES_CLI_PATH to override the CLI path.
     - id: tool-hyperframes
-      name: '@deepseek-ai/dsh-experimental-tool-hyperframes'
+      name: '@deepseek-ai/dsh-tool-hyperframes'
       disabled: true
       config:
         hyperframesCliPath: !!js process.env.HYPERFRAMES_CLI_PATH || 'hyperframes'

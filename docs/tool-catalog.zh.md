@@ -44,6 +44,9 @@
 | `@deepseek-ai/dsh-tool-todo` | `todo_write` | `ctx.tools`、`owning Agent session` | `tool/call`、`todo/write`、`tool/result` | - | todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为检查清单。`allowParallelInProgress` 是没有默认值的必填项，因此本目录明确选择 `true`，对应描述允许同时存在多个 `in_progress` 项。选择 `false` 的部署会获得同一工具，但描述会要求只能有 1 个活动任务。 |
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`、`ctx.workflowEngine`、`ctx.systemPrompt`、`a calling Agent (exec.agent parents the script children)` | `tool/call`、`tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`、`web_search` | `ctx.tools`、`ctx.web`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。 |
+| `@deepseek-ai/dsh-tool-hyperframes` | `video_lint`、`video_render`、`video_snapshot` | `ctx.tools`、`ctx.systemPrompt`、`the hyperframes CLI at execution time` | `tool/call`、`tool/result` | - | video_lint、video_snapshot 与 video_render 均调用 Hyperframes CLI；schema 采集在无 CLI 时也能注册这三者，快照网格拼合在 ImageMagick 存在时会额外调用它。 |
+| `@deepseek-ai/dsh-tool-image-gen` | `generate_image` | `ctx.tools`、`ctx.credentials or the launch environment at execution time` | `tool/call`、`tool/result` | - | generate_image 创建 EvoLink Z-Image Turbo 任务并轮询至完成；schema 采集在无 API key 或网络调用时也能注册该工具。 |
+| `@deepseek-ai/dsh-tool-tts` | `generate_speech` | `ctx.tools`、`ctx.attachments and ctx.credentials or the launch environment at execution time` | `tool/call`、`tool/result` | - | generate_speech 通过 DashScope 合成音频并将 WAV 提交到附件存储；schema 采集在无 key、网络或附件后端时也能注册该工具。 |
 
 <a id="deepseek-aidsh-tool-ask-user"></a>
 
@@ -2231,3 +2234,181 @@ todo_write 是会话所有的状态；UI 将最新的 todo/write 事件渲染为
 来源：[`packages/web/tool-web/src/index.ts`](../packages/web/tool-web/src/index.ts)
 
 web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。
+
+<a id="deepseek-aidsh-tool-hyperframes"></a>
+
+## `@deepseek-ai/dsh-tool-hyperframes`
+
+### `video_lint`
+
+校验 Hyperframes 视频项目的常见错误，例如缺失素材、无效时序或结构问题。返回带严重级别的问题列表。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "project_path": {
+      "type": "string",
+      "description": "Absolute path to the Hyperframes project directory"
+    },
+    "verbose": {
+      "type": "boolean",
+      "description": "Show info-level findings (default: false)"
+    }
+  },
+  "required": [
+    "project_path"
+  ]
+}
+```
+
+来源：[`packages/web/tool-hyperframes/src/index.ts`](../packages/web/tool-hyperframes/src/index.ts)
+
+### `video_render`
+
+将 Hyperframes 合成渲染为 MP4。支持质量预设与自定义帧率。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "project_path": {
+      "type": "string",
+      "description": "Absolute path to the Hyperframes project directory"
+    },
+    "output_path": {
+      "type": "string",
+      "description": "Output file path (default: <project>/renders/<name>.mp4)"
+    },
+    "fps": {
+      "type": "number",
+      "description": "Frame rate (default: composition's data-fps or 30)"
+    },
+    "quality": {
+      "type": "string",
+      "description": "Quality preset (default: looks)",
+      "enum": [
+        "draft",
+        "looks",
+        "delivery"
+      ]
+    }
+  },
+  "required": [
+    "project_path"
+  ]
+}
+```
+
+来源：[`packages/web/tool-hyperframes/src/index.ts`](../packages/web/tool-hyperframes/src/index.ts)
+
+### `video_snapshot`
+
+从 Hyperframes 合成中截取关键帧为 PNG 截图。提供多个时间点（最多 9 个）时，工具会将它们拼合为网格图（每行 3 张）。便于在特定时刻做视觉校验。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "project_path": {
+      "type": "string",
+      "description": "Absolute path to the Hyperframes project directory"
+    },
+    "time_points": {
+      "type": "array",
+      "description": "Array of timestamps in seconds to capture (max 9). If omitted, uses evenly-spaced frames",
+      "items": {
+        "type": "number"
+      }
+    },
+    "output_path": {
+      "type": "string",
+      "description": "Directory to write snapshots (default: <project>/snapshots)"
+    }
+  },
+  "required": [
+    "project_path"
+  ]
+}
+```
+
+来源：[`packages/web/tool-hyperframes/src/index.ts`](../packages/web/tool-hyperframes/src/index.ts)
+
+video_lint、video_snapshot 与 video_render 均调用 Hyperframes CLI；schema 采集在无 CLI 时也能注册这三者，快照网格拼合在 ImageMagick 存在时会额外调用它。
+
+<a id="deepseek-aidsh-tool-image-gen"></a>
+
+## `@deepseek-ai/dsh-tool-image-gen`
+
+### `generate_image`
+
+使用 EvoLink Z-Image Turbo 模型根据文本提示生成图像。工具会创建异步生成任务并轮询直至图像就绪。成功时返回一个或多个图像 URL。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "prompt": {
+      "type": "string",
+      "description": "A detailed text description of the image to generate."
+    },
+    "size": {
+      "type": "string",
+      "description": "Aspect ratio of the generated image. Defaults to 1:1 (square).",
+      "enum": [
+        "1:1",
+        "2:3",
+        "3:2",
+        "3:4",
+        "4:3",
+        "9:16",
+        "16:9",
+        "1:2",
+        "2:1"
+      ]
+    }
+  },
+  "required": [
+    "prompt"
+  ]
+}
+```
+
+来源：[`packages/web/tool-image-gen/src/index.ts`](../packages/web/tool-image-gen/src/index.ts)
+
+generate_image 创建 EvoLink Z-Image Turbo 任务并轮询至完成；schema 采集在无 API key 或网络调用时也能注册该工具。
+
+<a id="deepseek-aidsh-tool-tts"></a>
+
+## `@deepseek-ai/dsh-tool-tts`
+
+### `generate_speech`
+
+使用 Qwen 文本转语音模型将文本转为语音。返回持久音频附件（WAV 文件）及其临时提供方 URL。指定 voice 可控制说话人音色；常用音色包括 Cherry、Serena、Ethan 与 Chelsie。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "text": {
+      "type": "string",
+      "description": "The text to synthesize. Supports multilingual and mixed-language input."
+    },
+    "voice": {
+      "type": "string",
+      "description": "Speaker timbre. Defaults to the configured voice (Cherry) when omitted."
+    },
+    "language": {
+      "type": "string",
+      "description": "Language hint for synthesis. One of Auto, Chinese, English, German, Italian, Portuguese, Spanish, Japanese, Korean, French, Russian. Defaults to Auto."
+    }
+  },
+  "required": [
+    "text"
+  ]
+}
+```
+
+来源：[`packages/web/tool-tts/src/index.ts`](../packages/web/tool-tts/src/index.ts)
+
+generate_speech 通过 DashScope 合成音频并将 WAV 提交到附件存储；schema 采集在无 key、网络或附件后端时也能注册该工具。
