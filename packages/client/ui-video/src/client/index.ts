@@ -4,10 +4,11 @@
  *
  * The mode is declared through `ctx.layout.registerShellMode`, so the shell
  * draws the top-bar switch and lays the panes out without knowing what a video
- * project is; its third pane is `{ kind: 'conversation' }`, which re-mounts the
- * frame's own conversation surface on the right — the real session header,
- * transcript, and composer, including the bubble Markdown rendering and the
- * collapsible intermediate steps, rather than a restaging of them.
+ * project is; its third pane is `{ kind: 'conversation', simple: true }`, which
+ * re-mounts the frame's own conversation surface on the right in its chat-only
+ * posture — the real transcript and one input, including the bubble Markdown
+ * rendering and the collapsible intermediate steps, without the View tabs, the
+ * model seat, or the composer tool row — rather than a restaging of them.
  *
  * The two panes this package registers share one roster controller, so a
  * selection made on the left is what the centre renders and one poll keeps
@@ -64,7 +65,7 @@ export function apply(ctx: ClientContext): void {
       panes: [
         { kind: 'pane', pane: 'projects' },
         { kind: 'pane', pane: 'preview' },
-        { kind: 'conversation' },
+        { kind: 'conversation', simple: true },
       ],
     }
     return ctx.layout.registerShellMode(spec)
@@ -78,6 +79,8 @@ export function apply(ctx: ClientContext): void {
 
   const previewInjected = (): VideoPreviewPaneInjected => ({
     hooks: { videoProjects: projects.store },
+    setViewMode: (mode) => { projects.setViewMode(mode) },
+    ensurePeaks: (key, url) => { void projects.ensurePeaks(key, url) },
   })
 
   // The pane slot is declared by the frame's root registration, which mounts

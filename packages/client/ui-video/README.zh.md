@@ -1,5 +1,5 @@
 ---
-description: "web GUI 的视频制作 shell 模式：一个顶栏切换组件，把项目列表与分镜预览排列在真实对话界面旁，供组合或调试浏览器视频界面的用户使用。"
+description: "web GUI 的视频制作 shell 模式：一个顶栏切换组件，把项目列表、脚本与时间轴预览，以及处于纯聊天姿态的真实对话界面并列排布，供组合或调试浏览器视频界面的用户使用。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包为 web GUI 增加一个视频制作模式。选中其顶栏切换组件后，默认三栏框架被替换为：左侧项目列表、中间分镜预览、右侧已发布的对话界面——即真实的会话头部、转录与输入器，含气泡 Markdown 与可折叠的中间步骤，而非对其的重新搭建。列表列出宿主发现的每个 `script.json` 项目；中间播放某项目的最新渲染，或在渲染存在前展示其分镜序列。将它与提供数据的 [`dsh-host-video-project`](../../host/video-project/README.zh.md) 一同挂载。
+本包为 web GUI 增加一个视频制作模式。它的顶栏切换组件把默认三栏框架替换为：左侧项目列表、中间预览、右侧处于纯聊天姿态的已发布对话界面——即真实的转录与一个输入框，不含视图标签页、模型席位或输入器工具行。中间在格式化的 `script.json` 与一个播放器之间切换，播放器带有刻度尺、三条对齐的轨道与一个可 seek 的播放头。将它与提供数据的 [`dsh-host-video-project`](../../host/video-project/README.zh.md) 一同挂载。
 
 ## 目录
 
@@ -29,7 +29,11 @@ kind: "package-reference"
 
 ### 预期效果
 
-切换组件在默认布局与 `video` 模式之间选择。在视频模式下，列表栏按最新在前列出发现的项目，每项含标题、分镜数、渲染徽章与更新时间；选中某项即驱动中间窗格。当项目存在渲染时，中间通过宿主支持 Range 的媒体路由播放最新的 `.mp4`；否则在按脚本顺序排列的分镜序列上方显示一条"未渲染"提示——每个分镜含缩略图（或生成的图片，或缺失静态图占位）、视觉类型徽章、时长、描述与旁白。右栏是框架自身的对话界面，因此在其中输入视频制作请求会运行该会话的 agent preset，并以与默认布局完全一致的方式渲染。两个窗格共享一个 roster 控制器，每五秒轮询宿主一次，因此 agent 写入项目目录的分镜、旁白音频与渲染无需刷新即可出现。
+切换组件在默认布局与 `video` 模式之间选择。在视频模式下，列表栏按最新在前列出发现的项目，每项含标题、分镜数、渲染徽章与更新时间；选中某项即驱动中间窗格，未选择时最新项目会自行打开。两个窗格共享一个 roster 控制器，每五秒轮询宿主一次，因此 agent 写入项目目录的分镜、旁白音频与渲染无需刷新即可出现。
+
+中间窗格右上角的切换组件在两个界面之间切换。**脚本**把 `script.json` 排布为可供阅读的形式——标题、简介，以及每个分镜的视觉类型徽章、时长、描述、静态图与完整旁白——而非原始 JSON。**预览**播放该项目：已渲染的项目通过宿主支持 Range 的媒体路由以原生传输播放其最新的 `.mp4`，而未渲染的项目则在分镜片段上运行一个虚拟时钟，把当前分镜的静态图作为画面、旁白作为字幕，并依次播放每个分镜的旁白音频。播放器下方，一条刻度尺与三条对齐的轨道——字幕、画面缩略图与音频波形——共享同一水平几何，因此刻度尺右端的缩放控件会同时缩放三者，而在它们任意位置拖动都会 seek 播放头。
+
+视图跟随项目的阶段：只有脚本的项目以**脚本**打开，渲染已出现的项目以**预览**打开；手动切换会在轮询中保留，直到项目进入新阶段。右栏是框架自身的对话界面，处于纯聊天姿态——气泡 Markdown、可折叠的中间步骤与一个输入框，不含视图标签页、模型席位或输入器工具行——因此在其中输入视频制作请求会运行该会话的 agent preset，并以与默认布局完全一致的方式渲染。
 
 -----
 
@@ -41,9 +45,11 @@ kind: "package-reference"
 
 node 半侧是一个空 `apply`，用以把插件保留在宿主 roster 上；浏览器半侧通过 `exports["./client"]` 发布，由 `package.json` 中的 `dsh.client` 声明发现（inject `locale`、`ui-layout`、`ui-renderer`；platform `web`）。
 
-浏览器 `apply` 注册 `video` 语言词典、一个通过 `ctx.layout.registerShellMode` 注册的替代 shell 模式，以及 `shell.mode.pane` keyed slot 上的两个窗格。模式 spec 固定 `columns: '260px minmax(0, 1fr) 400px'` 与三个窗格——`projects`、`preview` 与 `{ kind: 'conversation' }`——因此框架在不知道视频项目为何物的情况下绘制切换组件并排布窗格；conversation 窗格重新挂载框架自身的 session-maybe 界面，而非其副本。label 是一个按渲染解析的 thunk，因此标签页跟随当前语言而无需重新注册。
+浏览器 `apply` 注册 `video` 语言词典、一个通过 `ctx.layout.registerShellMode` 注册的替代 shell 模式，以及 `shell.mode.pane` keyed slot 上的两个窗格。模式 spec 固定 `columns: '260px minmax(0, 1fr) 400px'` 与三个窗格——`projects`、`preview` 与 `{ kind: 'conversation', simple: true }`——因此框架在不知道视频项目为何物的情况下绘制切换组件并排布窗格；`simple` 标志把框架自身的 session-maybe 界面以纯聊天姿态重新挂载，而非其副本。label 是一个按渲染解析的 thunk，因此标签页跟随当前语言而无需重新注册。
 
-一个 `VideoProjectsController`（[`src/client/video-store.ts`](src/client/video-store.ts)）拥有两个窗格共享的 roster 与 detail 快照，因此左侧的选择即中间所渲染的内容。它通过同源 `fetch` 读取宿主的 `/api/video/*` 路由——连接层已为浏览器完成认证——并按间隔轮询，因为没有转发事件会通告 `script.json` 的变化；进行中的轮询不会被重复叠加。每个窗格通过 inject 的 `hooks` 隔间接收该 store，而窗格 slot 用 `ctx.slots.inject` 填充，因为框架只在模式主体首次渲染时才声明它。
+一个 `VideoProjectsController`（[`src/client/video-store.ts`](src/client/video-store.ts)）拥有两个窗格共享的 roster、detail、视图模式与已解码波形缓存，因此左侧的选择即中间所渲染的内容。它通过同源 `fetch` 读取宿主的 `/api/video/*` 路由——连接层已为浏览器完成认证——并按间隔轮询，因为没有转发事件会通告 `script.json` 的变化；进行中的轮询不会被重复叠加。每次 detail 读取都会解析项目的阶段，且只在阶段变化时才重新驱动视图模式，因此轮询绝不会与手动切换冲突。波形峰值通过 Web Audio API 按每个音频路径解码一次并缓存于快照上；解码失败则缓存一个空集合，用以绘制占位条。窗格 slot 用 `ctx.slots.inject` 填充，因为框架只在模式主体首次渲染时才声明它。
+
+时间轴是关于分镜的纯数学（[`src/client/timeline.ts`](src/client/timeline.ts)）：`buildSegments` 按累计时长放置每个分镜，`rulerTicks` 选择一个在当前缩放下保持刻度清晰的步长，而共享的像素↔秒换算驱动刻度尺、三条轨道与播放头，因此它们不会彼此错位。
 
 ### 源码地图
 
@@ -51,9 +57,14 @@ node 半侧是一个空 `apply`，用以把插件保留在宿主 roster 上；�
 |---|---|
 | [`src/index.ts`](src/index.ts) | node 半侧：空 `apply`，把插件保留在宿主 roster 上 |
 | [`src/client/index.ts`](src/client/index.ts) | 浏览器半侧：语言、shell 模式与两个窗格注册 |
-| [`src/client/video-store.ts`](src/client/video-store.ts) | roster 控制器、宿主传输与轮询 |
+| [`src/client/video-store.ts`](src/client/video-store.ts) | roster 控制器、宿主传输、轮询、视图模式与波形缓存 |
+| [`src/client/timeline.ts`](src/client/timeline.ts) | 纯片段、刻度尺与像素↔秒数学 |
+| [`src/client/waveform.ts`](src/client/waveform.ts) | PCM 到峰值的归约与浏览器音频解码 |
 | [`src/client/VideoProjectsPane.tsx`](src/client/VideoProjectsPane.tsx) | 左侧列表窗格 |
-| [`src/client/VideoPreviewPane.tsx`](src/client/VideoPreviewPane.tsx) | 中间播放器与分镜序列窗格 |
+| [`src/client/VideoPreviewPane.tsx`](src/client/VideoPreviewPane.tsx) | 中间窗格：脚本/预览切换、播放状态与缩放 |
+| [`src/client/VideoScriptView.tsx`](src/client/VideoScriptView.tsx) | 格式化的 `script.json` 界面 |
+| [`src/client/VideoPlayer.tsx`](src/client/VideoPlayer.tsx) | 已渲染的 `<video>`，或当前分镜的静态图与字幕 |
+| [`src/client/VideoTimeline.tsx`](src/client/VideoTimeline.tsx) | 刻度尺、三条轨道、播放头、传输与缩放控件 |
 | [`src/client/locales.ts`](src/client/locales.ts) | 双语 `video` 命名空间词典 |
 
 </details>
@@ -65,7 +76,8 @@ node 半侧是一个空 `apply`，用以把插件保留在宿主 roster 上；�
 
 - [`dsh-host-video-project`](../../host/video-project/README.zh.md)——本界面读取的宿主路由。
 - [`dsh-video-app` 组合包](../../bundle/video-app/README.zh.md)——挂载两个半侧的 profile 层。
-- [`dsh-client-ui-layout`](../ui-layout/README.zh.md)——本包注册进入的 shell 模式切换组件与窗格布局。
+- [`dsh-client-ui-layout`](../ui-layout/README.zh.md)——本包注册进入的 shell 模式切换组件、`simple` 对话窗格与窗格布局。
+- [`dsh-client-ui-conversation`](../ui-conversation/README.zh.md)——`simple` 标志以纯聊天渲染的对话界面。
 - [Web 客户端 slot](../../../docs/subsystems/slots.zh.md)——`shell.mode.pane` keyed slot 与 slot 货币。
 
 -----
@@ -85,7 +97,8 @@ node 半侧是一个空 `apply`，用以把插件保留在宿主 roster 上；�
 
 这些限制告诉你本界面尚未做到什么；它们是本包当前的约束，而非任务清单。
 
-- **预览是播放器或分镜列表，而非时间轴。** 中间播放最新渲染或按脚本顺序列出分镜；带共享播放头与 seek 的字幕、画面缩略图与音频轨道属延后工作。
+- **未渲染的播放器是虚拟时钟，而非渲染。** 在项目的 `.mp4` 存在前，预览按分镜时长推进播放头并依次播放每个分镜的旁白音频；它不混合背景音乐、不渲染转场，且相对于最终视频并非帧级精确。已渲染的 `.mp4` 才是真正的预览。
+- **波形需要 Web Audio。** 音频轨道通过 `AudioContext.decodeAudioData` 解码每个分镜的旁白；音频缺失、仍在写入或无法解码的分镜改为绘制占位条。
 - **列表靠轮询，而非推送。** agent 写入项目目录的变化在下一次五秒轮询时出现，而非即时，且只在视频窗格挂载期间。
 - **模式需要 layout 服务。** 切换组件与窗格针对 `ctx.layout` 与 `shell.mode.pane` slot 注册；不含 layout 服务的组合不绘制视频模式。
 

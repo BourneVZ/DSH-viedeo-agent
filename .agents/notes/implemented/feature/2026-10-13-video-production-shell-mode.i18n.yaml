@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-10-13-video-production-shell-mode.md
-2026-10-13-video-production-shell-mode.md: b1276b917d7b1ca9a2b03eb14909331919afac7f
-2026-10-13-video-production-shell-mode.zh.md: 10ff9481049cf62e839ad63f983d97c6b57edbb4
+2026-10-13-video-production-shell-mode.md: 1efc3a9b7e3cefdbe184bd8746d76c8f64bd8ff6
+2026-10-13-video-production-shell-mode.zh.md: 64bdbbe3d523e4b8429eb1004e13bc65b5c99fd0

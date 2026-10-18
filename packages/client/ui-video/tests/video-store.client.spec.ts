@@ -5,10 +5,10 @@
  * two panes current.
  */
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import type { VideoProject, VideoProjectSummary } from '@deepseek-ai/dsh-host-video-project/types'
+import type { VideoProject, VideoProjectSummary, VideoShot } from '@deepseek-ai/dsh-host-video-project/types'
 import {
   browserJsonFetch, POLL_INTERVAL_MS, readProjectDetail, readProjectList, videoMediaUrl,
-  VideoProjectsController, type VideoJsonFetch,
+  VideoProjectsController, WAVEFORM_BUCKETS, type VideoJsonFetch,
 } from '../src/client/video-store.ts'
 
 /** One discovered project as the list route reports it. */
@@ -21,16 +21,29 @@ const SUMMARY: VideoProjectSummary = {
   hasRender: false,
 }
 
-/** The same project with its resolved shot timeline. */
+/** One resolved shot. */
+const SHOT: VideoShot = {
+  id: 'shot-1', index: 0, description: 'A title card', narration: 'Welcome.',
+  duration: 4, visualType: 'html', audio: '/work/demo/a.wav',
+}
+
+/** The same project with one shot and no render: the script stage. */
 const DETAIL: VideoProject = {
   ...SUMMARY,
   summary: 'A demo video',
   duration: 4,
-  shots: [],
+  shots: [SHOT],
 }
+
+/** The same project once a render exists: the render stage. */
+const RENDERED: VideoProject = { ...DETAIL, hasRender: true, render: '/work/demo/out.mp4' }
+
+/** The same project with no shots yet: the empty stage. */
+const EMPTY: VideoProject = { ...DETAIL, shots: [] }
 
 afterEach(() => {
   vi.useRealTimers()
+  vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
 
@@ -91,9 +104,14 @@ describe('browserJsonFetch', () => {
 
 describe('VideoProjectsController', () => {
   /** A transport answering both routes from fixed documents. */
-  function reader(): Mock<VideoJsonFetch> {
+  function reader(detail: VideoProject = DETAIL): Mock<VideoJsonFetch> {
     return vi.fn<VideoJsonFetch>(async (path: string) =>
-      path === '/api/video/projects' ? { projects: [SUMMARY] } : { project: DETAIL })
+      path === '/api/video/projects' ? { projects: [SUMMARY] } : { project: detail })
+  }
+
+  /** A transport answering an empty roster, so no project auto-selects. */
+  function emptyList(): Mock<VideoJsonFetch> {
+    return vi.fn<VideoJsonFetch>(async () => ({ projects: [] }))
   }
 
   /** A transport that always fails with one thrown value. */
@@ -102,12 +120,12 @@ describe('VideoProjectsController', () => {
   }
 
   it('reads the list once at start and again per interval', async () => {
-    const read = reader()
+    const read = emptyList()
     const controller = new VideoProjectsController(read)
     const stop = controller.start()
     await vi.advanceTimersByTimeAsync(0)
     expect(controller.store.getSnapshot()).toMatchObject({
-      listStatus: 'ready', projects: [SUMMARY], listError: null,
+      listStatus: 'ready', projects: [], listError: null,
     })
     await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
     expect(read).toHaveBeenCalledTimes(2)
@@ -149,6 +167,25 @@ describe('VideoProjectsController', () => {
     stop()
   })
 
+  it('auto-selects the newest project when none is chosen', async () => {
+    const controller = new VideoProjectsController(reader())
+    const stop = controller.start()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(controller.store.getSnapshot()).toMatchObject({
+      selected: '/work/demo', detailStatus: 'ready', project: DETAIL,
+    })
+    stop()
+  })
+
+  it('leaves an existing selection alone while polling', async () => {
+    const controller = new VideoProjectsController(reader())
+    await controller.select('/work/other')
+    const stop = controller.start()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(controller.store.getSnapshot().selected).toBe('/work/other')
+    stop()
+  })
+
   it('reads the selected project and keeps polling it', async () => {
     const read = reader()
     const controller = new VideoProjectsController(read)
@@ -187,5 +224,104 @@ describe('VideoProjectsController', () => {
     const calls = read.mock.calls.length
     await controller.select('/work/demo')
     expect(read).toHaveBeenCalledTimes(calls)
+  })
+
+  it('shows the script for a project short of a render', async () => {
+    const controller = new VideoProjectsController(reader())
+    await controller.select('/work/demo')
+    expect(controller.store.getSnapshot().viewMode).toBe('script')
+  })
+
+  it('shows the script for a project with no shots yet', async () => {
+    const controller = new VideoProjectsController(reader(EMPTY))
+    await controller.select('/work/demo')
+    expect(controller.store.getSnapshot().viewMode).toBe('script')
+  })
+
+  it('switches to the player when a render appears', async () => {
+    let rendered = false
+    const read = vi.fn<VideoJsonFetch>(async (path: string) =>
+      path === '/api/video/projects'
+        ? { projects: [SUMMARY] }
+        : { project: rendered ? RENDERED : DETAIL })
+    const controller = new VideoProjectsController(read)
+    const stop = controller.start()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(controller.store.getSnapshot().viewMode).toBe('script')
+    rendered = true
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
+    expect(controller.store.getSnapshot().viewMode).toBe('preview')
+    stop()
+  })
+
+  it('keeps a manual toggle until the stage changes', async () => {
+    const controller = new VideoProjectsController(reader())
+    await controller.select('/work/demo')
+    controller.setViewMode('preview')
+    const stop = controller.start()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(controller.store.getSnapshot().viewMode).toBe('preview')
+    stop()
+  })
+
+  describe('waveform peaks', () => {
+    /** An AudioContext stub decoding to one fixed channel. */
+    function stubDecode(channel: ArrayLike<number>): void {
+      class FakeAudioContext {
+        decodeAudioData = async () => ({ getChannelData: () => channel }) as unknown as AudioBuffer
+        close = async () => {}
+      }
+      vi.stubGlobal('AudioContext', FakeAudioContext)
+    }
+
+    /** A fetch stub answering one decodable body. */
+    function stubFetchOk(): Mock {
+      const fetchMock = vi.fn(async () =>
+        ({ ok: true, status: 200, arrayBuffer: async () => new ArrayBuffer(4) }))
+      vi.stubGlobal('fetch', fetchMock)
+      return fetchMock
+    }
+
+    it('decodes and caches one shot waveform', async () => {
+      stubDecode([0.2, -0.8])
+      const fetchMock = stubFetchOk()
+      const controller = new VideoProjectsController(reader())
+      await controller.ensurePeaks('/work/demo/a.wav', '/api/video/media?path=a.wav')
+      const peaks = controller.store.getSnapshot().peaks['/work/demo/a.wav']
+      expect(peaks).toHaveLength(WAVEFORM_BUCKETS)
+      expect(peaks).toContain(0.8)
+      expect(fetchMock).toHaveBeenCalledOnce()
+    })
+
+    it('does not re-decode a cached waveform', async () => {
+      stubDecode([0.5])
+      const fetchMock = stubFetchOk()
+      const controller = new VideoProjectsController(reader())
+      await controller.ensurePeaks('/k', '/u')
+      await controller.ensurePeaks('/k', '/u')
+      expect(fetchMock).toHaveBeenCalledOnce()
+    })
+
+    it('does not stack a decode already in flight', async () => {
+      stubDecode([0.5])
+      let release: () => void = () => {}
+      const gate = new Promise<unknown>((resolve) => {
+        release = () => { resolve({ ok: true, status: 200, arrayBuffer: async () => new ArrayBuffer(4) }) }
+      })
+      const fetchMock = vi.fn(() => gate)
+      vi.stubGlobal('fetch', fetchMock)
+      const controller = new VideoProjectsController(reader())
+      const both = Promise.all([controller.ensurePeaks('/k', '/u'), controller.ensurePeaks('/k', '/u')])
+      release()
+      await both
+      expect(fetchMock).toHaveBeenCalledOnce()
+    })
+
+    it('caches an empty peak set when the decode fails', async () => {
+      vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 502 })))
+      const controller = new VideoProjectsController(reader())
+      await controller.ensurePeaks('/k', '/u')
+      expect(controller.store.getSnapshot().peaks['/k']).toEqual([])
+    })
   })
 })

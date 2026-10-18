@@ -95,7 +95,7 @@ describe('ui-video browser half', () => {
     expect(mode.panes).toEqual([
       { kind: 'pane', pane: 'projects' },
       { kind: 'pane', pane: 'preview' },
-      { kind: 'conversation' },
+      { kind: 'conversation', simple: true },
     ])
     await fiber.dispose()
     expect(modes).toHaveLength(0)
@@ -116,6 +116,30 @@ describe('ui-video browser half', () => {
     expect(paneKeys(ctx)).toEqual(['projects', 'preview'])
     await fiber.dispose()
     expect(paneKeys(ctx)).toEqual([])
+  })
+
+  it('forwards both panes into the one controller they share', async () => {
+    const { ctx } = await bench()
+    const face = (key: string): Record<string, unknown> => {
+      const entry = ctx.slots.entries('shell.mode.pane').find(candidate => candidate.options.key === key)
+      if (entry?.inject === undefined) throw new Error(`no inject face for ${key}`)
+      return entry.inject()
+    }
+    const projects = face('projects')
+    const preview = face('preview')
+
+    // The preview face's view switch lands on the store the projects face reads,
+    // which is the whole point of routing both through one controller.
+    const store = projects.hooks as { videoProjects: { getSnapshot: () => { viewMode: string } } }
+    ;(preview.setViewMode as (mode: string) => void)('preview')
+    expect(store.videoProjects.getSnapshot().viewMode).toBe('preview')
+
+    // The remaining actions forward to the controller; with no host route behind
+    // them in this lane their reads fail closed rather than throw at the caller.
+    const stop = (projects.start as () => () => void)()
+    ;(projects.select as (path: string) => void)('/work/demo')
+    ;(preview.ensurePeaks as (key: string, url: string) => void)('/work/demo/a.wav', 'video://a')
+    stop()
   })
 
   it('registers the dictionary under its own namespace and releases it with the fiber', async () => {

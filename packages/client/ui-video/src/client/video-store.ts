@@ -14,9 +14,20 @@
 
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { VideoProject, VideoProjectSummary } from '@deepseek-ai/dsh-host-video-project/types'
+import { decodePeaks } from './waveform.ts'
 
 /** Milliseconds between two roster polls while a video pane is mounted. */
 export const POLL_INTERVAL_MS = 5_000
+
+/** Amplitude peaks decoded per shot for the audio track's waveform. */
+export const WAVEFORM_BUCKETS = 64
+
+/** Which surface the preview pane shows: the formatted script or the player. */
+export type VideoViewMode = 'script' | 'preview'
+
+/** How far the selected project has progressed, driving the auto view switch. */
+type VideoStage = 'empty' | 'script' | 'render'
+
 
 /**
  * Read one JSON document from an authenticated same-origin route.
@@ -42,6 +53,10 @@ export interface VideoProjectsState {
   project: VideoProject | null
   /** Why the detail could not be read, absent when it could. */
   detailError: string | null
+  /** Which surface the preview pane shows; the stage auto-switches it. */
+  viewMode: VideoViewMode
+  /** Decoded waveform peaks keyed by the audio's absolute host path. */
+  peaks: Readonly<Record<string, readonly number[]>>
 }
 
 const INITIAL: VideoProjectsState = {
@@ -52,6 +67,8 @@ const INITIAL: VideoProjectsState = {
   detailStatus: 'idle',
   project: null,
   detailError: null,
+  viewMode: 'script',
+  peaks: {},
 }
 
 /**
@@ -137,6 +154,12 @@ export class VideoProjectsController {
   /** Set while one poll is in flight, so a slower answer is not doubled up. */
   #polling = false
 
+  /** The selected project's last-seen stage; a change re-drives the auto view. */
+  #stage: VideoStage | null = null
+
+  /** Audio paths whose decode is in flight, so a shot is not decoded twice. */
+  #peaksInflight = new Set<string>()
+
   constructor(
     /** Transport the reads go through; the browser default is same-origin fetch. */
     private readonly read: VideoJsonFetch = browserJsonFetch,
@@ -172,10 +195,27 @@ export class VideoProjectsController {
     try {
       const project = readProjectDetail(
         await this.read(`/api/video/project?path=${encodeURIComponent(path)}`, signal))
-      this.#set({ detailStatus: 'ready', project, detailError: null })
+      this.#set({ detailStatus: 'ready', project, detailError: null, ...this.#autoView(project) })
     } catch (error) {
       this.#set({ detailStatus: 'error', detailError: messageOf(error) })
     }
+  }
+
+  /**
+   * Resolve the view switch a freshly loaded project asks for. A project that
+   * has moved to a new stage takes the mode that stage defaults to — a render
+   * shows the player, anything short of one shows the script — while a project
+   * still on the stage the user is looking at leaves a manual toggle alone.
+   * @param project - the project just read.
+   * @returns a view-mode patch, empty when the stage has not changed.
+   */
+  #autoView(project: VideoProject): Partial<VideoProjectsState> {
+    const stage: VideoStage = project.render !== undefined
+      ? 'render'
+      : project.shots.length > 0 ? 'script' : 'empty'
+    if (stage === this.#stage) return {}
+    this.#stage = stage
+    return { viewMode: stage === 'render' ? 'preview' : 'script' }
   }
 
   /**
@@ -191,8 +231,16 @@ export class VideoProjectsController {
     this.#polling = true
     try {
       await this.#loadList(signal)
-      const { selected } = this.store.getSnapshot()
-      if (selected !== null) await this.#loadDetail(selected, signal)
+      const { selected, projects } = this.store.getSnapshot()
+      // With nothing chosen yet, open the most recently modified project so a
+      // freshly created one previews without a manual pick.
+      const target = selected ?? projects[0]?.path ?? null
+      if (target === null) return
+      if (target !== selected) {
+        this.#stage = null
+        this.#set({ selected: target, detailStatus: 'idle', project: null, detailError: null })
+      }
+      await this.#loadDetail(target, signal)
     } finally {
       this.#polling = false
     }
@@ -205,9 +253,42 @@ export class VideoProjectsController {
    */
   async select(path: string | null): Promise<void> {
     if (this.store.getSnapshot().selected === path) return
+    this.#stage = null
     this.#set({ selected: path, detailStatus: 'idle', project: null, detailError: null })
     if (path === null) return
     await this.#loadDetail(path, new AbortController().signal)
+  }
+
+  /**
+   * Switch the preview pane between the formatted script and the player. A
+   * manual switch survives polling until the project moves to a new stage.
+   * @param mode - the surface to show.
+   */
+  setViewMode(mode: VideoViewMode): void {
+    this.#set({ viewMode: mode })
+  }
+
+  /**
+   * Decode one shot's narration audio into waveform peaks, once. The result is
+   * cached on the snapshot, so a track re-render or a poll never re-decodes; a
+   * decode that fails caches an empty peak set, which draws the placeholder bar.
+   * @param key - absolute host path of the audio, the cache key.
+   * @param url - the media route URL serving that audio's bytes.
+   * @returns once the peaks are cached or the decode is already covered.
+   */
+  async ensurePeaks(key: string, url: string): Promise<void> {
+    if (this.store.getSnapshot().peaks[key] !== undefined || this.#peaksInflight.has(key)) return
+    this.#peaksInflight.add(key)
+    let decoded: readonly number[]
+    try {
+      decoded = await decodePeaks(url, WAVEFORM_BUCKETS, new AbortController().signal)
+    } catch {
+      // A shot whose audio is absent, still being written, or undecodable draws
+      // the placeholder bar; the decode failure carries nothing to show.
+      decoded = []
+    }
+    this.#peaksInflight.delete(key)
+    this.#set({ peaks: { ...this.store.getSnapshot().peaks, [key]: decoded } })
   }
 
   /**

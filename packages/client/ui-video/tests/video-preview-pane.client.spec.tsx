@@ -1,84 +1,43 @@
 // @vitest-environment jsdom
 /**
- * The video preview pane: its empty and failure states, the rendered project's
- * player, and the shot sequence an unrendered project shows in its place.
+ * The preview pane: its empty and failure states, the script/preview toggle,
+ * the formatted script and the player it switches between, the virtual clock
+ * that advances the unrendered shot player, the zoom, and the wiring of the
+ * roster actions into the timeline.
  */
-import { afterEach, describe, expect, it } from 'vitest'
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import type { VideoProject, VideoShot } from '@deepseek-ai/dsh-host-video-project/types'
 import { VideoPreviewPane, type VideoPreviewPaneProps } from '../src/client/VideoPreviewPane.tsx'
 import type { VideoProjectsState } from '../src/client/video-store.ts'
 import { zh } from '../src/client/locales.ts'
+import { mediaUrl, project, shot } from './fixtures.ts'
 
 const t: VideoPreviewPaneProps['t'] = makeTranslate(zh)
 
 afterEach(() => {
   cleanup()
+  vi.useRealTimers()
 })
 
-/** One resolved shot as the detail route reports it. */
-function shot(over: Partial<VideoShot> = {}): VideoShot {
-  return {
-    id: 'shot-1',
-    index: 0,
-    description: 'A title card',
-    narration: 'Welcome.',
-    duration: 3.4,
-    visualType: 'html',
-    ...over,
-  }
-}
-
-/** One project with its shot timeline. */
-function project(over: Partial<VideoProject> = {}): VideoProject {
-  return {
-    path: '/work/demo',
-    name: 'demo',
-    title: 'Demo',
-    updatedAt: 1_700_000_000_000,
-    shotCount: 1,
-    hasRender: false,
-    summary: 'A demo video',
-    duration: 3.4,
-    shots: [shot()],
-    ...over,
-  }
-}
-
-/** Component props over a fixed snapshot. */
-function props(state: Partial<VideoProjectsState>): VideoPreviewPaneProps {
+/** Pane props over a fixed roster snapshot. */
+function props(state: Partial<VideoProjectsState>, over: Partial<VideoPreviewPaneProps> = {}): VideoPreviewPaneProps {
   const snapshot: VideoProjectsState = {
-    listStatus: 'ready',
-    projects: [],
-    listError: null,
-    selected: null,
-    detailStatus: 'idle',
-    project: null,
-    detailError: null,
+    listStatus: 'ready', projects: [], listError: null, selected: null,
+    detailStatus: 'idle', project: null, detailError: null, viewMode: 'script', peaks: {},
     ...state,
   }
   function useVideoProjects<S>(select: (s: VideoProjectsState) => S): S {
     return select(snapshot)
   }
-  return { useVideoProjects, t } as unknown as VideoPreviewPaneProps
+  return { useVideoProjects, setViewMode: vi.fn(), ensurePeaks: vi.fn(), t, ...over } as unknown as VideoPreviewPaneProps
 }
 
-/** The media URL the pane builds for one host path. */
-function mediaUrl(path: string): string {
-  return `${window.location.origin}/api/video/media?path=${encodeURIComponent(path)}`
-}
-
-/** The shot sequence, once rendered. */
-function shots(): HTMLElement {
-  return screen.getByRole('list', { name: zh['preview.shotsAria'] })
-}
-
-/** One shot cell's flattened text, which is how its parts read without jest-dom. */
-function shotText(rows: readonly HTMLElement[], index: number): string {
-  const row = rows[index]
-  if (row === undefined) throw new Error(`no shot cell at ${index}`)
-  return (row.textContent ?? '').replace(/\s+/g, ' ')
+/** The scrub surface, by its accessible name. */
+function scrub(container: HTMLElement): Element {
+  const found = container.querySelector(`[aria-label="${zh['timeline.scrubAria']}"]`)
+  if (found === null) throw new Error('no scrub surface')
+  return found
 }
 
 describe('VideoPreviewPane', () => {
@@ -97,76 +56,107 @@ describe('VideoPreviewPane', () => {
     expect(screen.getByRole('alert').textContent).toBe(zh['preview.error'])
   })
 
-  it('plays the newest render through the media route', () => {
+  it('switches view through the toggle', () => {
+    const setViewMode = vi.fn()
+    render(<VideoPreviewPane {...props({
+      detailStatus: 'ready', project: project(),
+    }, { setViewMode })} />)
+    fireEvent.click(screen.getByRole('button', { name: zh['preview.toggle.preview'] }))
+    fireEvent.click(screen.getByRole('button', { name: zh['preview.toggle.script'] }))
+    expect(setViewMode).toHaveBeenCalledWith('preview')
+    expect(setViewMode).toHaveBeenCalledWith('script')
+  })
+
+  it('marks the active view on the toggle', () => {
+    render(<VideoPreviewPane {...props({ detailStatus: 'ready', project: project(), viewMode: 'preview' })} />)
+    expect(screen.getByRole('button', { name: zh['preview.toggle.preview'] }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByRole('button', { name: zh['preview.toggle.script'] }).getAttribute('aria-pressed')).toBe('false')
+  })
+
+  it('renders the formatted script in script mode', () => {
+    render(<VideoPreviewPane {...props({ detailStatus: 'ready', project: project(), viewMode: 'script' })} />)
+    expect(screen.getByRole('list', { name: zh['preview.scriptShots'] })).toBeTruthy()
+    expect(screen.queryByRole('timer')).toBeNull()
+  })
+
+  it('renders the shot player and timeline in preview mode', () => {
+    render(<VideoPreviewPane {...props({
+      detailStatus: 'ready', project: project({ shots: [shot({ duration: 4 })] }), viewMode: 'preview',
+    })} />)
+    expect(screen.getByRole('timer')).toBeTruthy()
+    expect(screen.getByRole('button', { name: zh['preview.play'] })).toBeTruthy()
+    expect(screen.getByText(zh['timeline.audioTrack'])).toBeTruthy()
+  })
+
+  it('plays the rendered video and hides the shot transport', () => {
     const { container } = render(<VideoPreviewPane {...props({
       detailStatus: 'ready',
       project: project({ hasRender: true, render: '/work/demo/out.mp4' }),
+      viewMode: 'preview',
     })} />)
-    const player = container.querySelector('video')
-    expect(player?.getAttribute('src')).toBe(mediaUrl('/work/demo/out.mp4'))
-    expect(player?.getAttribute('aria-label')).toBe(zh['preview.videoAria'])
-    expect(screen.queryByRole('list')).toBeNull()
+    expect(container.querySelector('video')?.getAttribute('src')).toBe(mediaUrl('/work/demo/out.mp4'))
+    expect(screen.queryByRole('button', { name: zh['preview.play'] })).toBeNull()
   })
 
-  it('heads the pane with the declared title, summary, and total duration', () => {
+  it('advances the virtual clock while the shot player plays', async () => {
+    vi.useFakeTimers()
+    render(<VideoPreviewPane {...props({
+      detailStatus: 'ready', project: project({ shots: [shot({ duration: 4 })] }), viewMode: 'preview',
+    })} />)
+    expect(screen.getByRole('timer').textContent).toBe('00:00')
+    fireEvent.click(screen.getByRole('button', { name: zh['preview.play'] }))
+    await vi.advanceTimersByTimeAsync(1500)
+    expect(screen.getByRole('timer').textContent).toBe('00:01')
+  })
+
+  it('wraps the virtual clock back to zero at the end of the shots', async () => {
+    vi.useFakeTimers()
+    render(<VideoPreviewPane {...props({
+      detailStatus: 'ready', project: project({ shots: [shot({ duration: 2 })] }), viewMode: 'preview',
+    })} />)
+    fireEvent.click(screen.getByRole('button', { name: zh['preview.play'] }))
+    await vi.advanceTimersByTimeAsync(1500)
+    expect(screen.getByRole('timer').textContent).toBe('00:01')
+    await vi.advanceTimersByTimeAsync(600)
+    expect(screen.getByRole('timer').textContent).toBe('00:00')
+  })
+
+  it('scales the tracks through the zoom control', () => {
+    const { container } = render(<VideoPreviewPane {...props({
+      detailStatus: 'ready', project: project({ shots: [shot({ duration: 4 })] }), viewMode: 'preview',
+    })} />)
+    const surface = scrub(container) as HTMLElement
+    expect(surface.style.width).toBe(`${72 + 4 * 40}px`)
+    fireEvent.click(screen.getByRole('button', { name: zh['timeline.zoomIn'] }))
+    expect(surface.style.width).toBe(`${72 + 4 * 60}px`)
+  })
+
+  it('shrinks the tracks through the zoom-out control', () => {
+    const { container } = render(<VideoPreviewPane {...props({
+      detailStatus: 'ready', project: project({ shots: [shot({ duration: 4 })] }), viewMode: 'preview',
+    })} />)
+    const surface = scrub(container) as HTMLElement
+    fireEvent.click(screen.getByRole('button', { name: zh['timeline.zoomOut'] }))
+    expect(surface.style.width).toBe(`${72 + 4 * (40 / 1.5)}px`)
+  })
+
+  it('moves the playhead when the timeline is scrubbed', () => {
+    const { container } = render(<VideoPreviewPane {...props({
+      detailStatus: 'ready', project: project({ shots: [shot({ duration: 4 })] }), viewMode: 'preview',
+    })} />)
+    // jsdom reports a zero origin, so 72px of gutter plus two seconds at 40px/s
+    // lands the drag at the two-second mark.
+    fireEvent.pointerDown(scrub(container), { clientX: 72 + 2 * 40 })
+    expect(screen.getByRole('timer').textContent).toBe('00:02')
+  })
+
+  it('forwards a shot audio to the roster waveform cache', () => {
+    const ensurePeaks = vi.fn()
     render(<VideoPreviewPane {...props({
       detailStatus: 'ready',
-      project: project({ duration: 10 }),
-    })} />)
-    expect(screen.getByRole('heading').textContent).toBe('Demo')
-    expect(screen.getByText('A demo video', { exact: false })).toBeTruthy()
-    expect(screen.getByText(zh['preview.duration'].replace('{seconds}', '10'))).toBeTruthy()
-  })
-
-  it('explains an unrendered project before its shot sequence', () => {
-    render(<VideoPreviewPane {...props({ detailStatus: 'ready', project: project() })} />)
-    expect(screen.getByText(zh['preview.unrendered'])).toBeTruthy()
-  })
-
-  it('shows each shot through its timeline thumbnail', () => {
-    render(<VideoPreviewPane {...props({
-      detailStatus: 'ready',
-      project: project({ shots: [shot({ thumbnail: '/work/demo/t.png', image: '/work/demo/i.png' })] }),
-    })} />)
-    expect(screen.getByAltText('A title card').getAttribute('src')).toBe(mediaUrl('/work/demo/t.png'))
-  })
-
-  it('falls back to the generated image when no thumbnail exists', () => {
-    render(<VideoPreviewPane {...props({
-      detailStatus: 'ready',
-      project: project({ shots: [shot({ image: '/work/demo/i.png' })] }),
-    })} />)
-    expect(screen.getByAltText('A title card').getAttribute('src')).toBe(mediaUrl('/work/demo/i.png'))
-  })
-
-  it('says so when a shot has no visual asset yet', () => {
-    render(<VideoPreviewPane {...props({ detailStatus: 'ready', project: project() })} />)
-    expect(screen.getByText(zh['preview.thumbnailMissing'])).toBeTruthy()
-    expect(screen.queryByAltText('A title card')).toBeNull()
-  })
-
-  it('numbers each shot and labels its visual kind, duration, and narration', () => {
-    render(<VideoPreviewPane {...props({
-      detailStatus: 'ready',
-      project: project({
-        shots: [
-          shot(),
-          shot({ id: 'shot-2', index: 1, visualType: 'image', duration: 0 }),
-          shot({ id: 'shot-3', index: 2, visualType: 'unknown' }),
-        ],
-      }),
-    })} />)
-    const rows = within(shots()).getAllByRole('listitem')
-    expect(rows).toHaveLength(3)
-    const first = shotText(rows, 0)
-    expect(first).toContain(zh['preview.shotIndex'].replace('{index}', '1'))
-    expect(first).toContain(zh['preview.visual.html'])
-    expect(first).toContain(zh['preview.duration'].replace('{seconds}', '3'))
-    expect(first).toContain(zh['preview.narration'])
-    expect(first).toContain('Welcome.')
-    const second = shotText(rows, 1)
-    expect(second).toContain(zh['preview.visual.image'])
-    expect(second).toContain(zh['preview.duration'].replace('{seconds}', '0'))
-    expect(shotText(rows, 2)).toContain(zh['preview.visual.unknown'])
+      project: project({ shots: [shot({ duration: 4, audio: '/work/demo/a.wav' })] }),
+      viewMode: 'preview',
+    }, { ensurePeaks })} />)
+    expect(ensurePeaks).toHaveBeenCalledWith('/work/demo/a.wav', mediaUrl('/work/demo/a.wav'))
   })
 })

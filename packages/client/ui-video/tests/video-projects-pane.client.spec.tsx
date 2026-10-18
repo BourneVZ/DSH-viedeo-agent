@@ -53,6 +53,8 @@ function props(
     detailStatus: 'idle',
     project: null,
     detailError: null,
+    viewMode: 'script',
+    peaks: {},
     ...state,
   }
   function useVideoProjects<S>(select: (s: VideoProjectsState) => S): S {
