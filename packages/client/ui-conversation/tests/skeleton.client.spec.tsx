@@ -2,7 +2,7 @@
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ComponentProps, ReactNode } from 'react'
-import { act, cleanup, fireEvent, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionListState, SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceSnapshot, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
@@ -126,6 +126,8 @@ function mount(
     composerBlock?: { reason: string }
     /** Mutable view ledger used by registration-order regressions. */
     viewTabs?: ViewTab[]
+    /** Render the conversation in its chat-only posture. */
+    simple?: boolean
   } = {},
 ) {
   const root = sid('root')
@@ -193,6 +195,7 @@ function mount(
         <ConversationSessionHeader
           sessionId={SID}
           SessionProvider={({ children }) => children}
+          simple={(owner as { simple?: boolean }).simple ?? false}
           useSession={useSession}
           useConversation={useConversation}
           useConversationViews={useConversationViews}
@@ -310,6 +313,7 @@ function mount(
     renderSlot,
     renderSlotChain,
     selectWorkspace: retargetWorkspace,
+    ...(options.simple === undefined ? {} : { simple: options.simple }),
     t,
   }
   const view = render(<ConversationRoot {...props} />)
@@ -577,6 +581,31 @@ describe('ConversationRoot resident composer', () => {
     expect(b.view.queryByTestId('view-new-view')).toBeNull()
     expect(b.view.getByRole('tab', { name: 'Chat' }).getAttribute('aria-selected')).toBe('true')
     expect(b.view.getByRole('tab', { name: 'New view' }).getAttribute('aria-selected')).toBe('false')
+  })
+
+  it('chat-only posture hides the View tabs it would otherwise show', () => {
+    const viewTabs: ViewTab[] = [
+      { id: 'chat', label: 'Chat' },
+      { id: 'trajectory', label: 'Trajectory' },
+    ]
+    // Two views draw the tablist in the ordinary surface…
+    const ordinary = mount(sessionSnapshotOf(), undefined, undefined, { viewTabs })
+    expect(within(ordinary.view.container).queryByRole('tablist')).toBeTruthy()
+    // …and the same ledger draws none in the chat-only posture. Scoped to each
+    // mount's container because cleanup only runs between tests, not mounts.
+    const simple = mount(sessionSnapshotOf(), undefined, undefined, { viewTabs, simple: true })
+    expect(within(simple.view.container).queryByRole('tablist')).toBeNull()
+  })
+
+  it('chat-only posture drops the model seat and the composer tool row', () => {
+    // The ordinary composer stages both the model seat and the plan control.
+    const ordinary = mount(sessionSnapshotOf())
+    expect(ordinary.seatOwners.some(seat => seat.key === 'conversation.input.model')).toBe(true)
+    expect(ordinary.seatOwners.some(seat => seat.key === 'conversation.input.plan')).toBe(true)
+    // The chat-only composer stages neither, keeping just the editor and submit.
+    const simple = mount(sessionSnapshotOf(), undefined, undefined, { simple: true })
+    expect(simple.seatOwners.some(seat => seat.key === 'conversation.input.model')).toBe(false)
+    expect(simple.seatOwners.some(seat => seat.key === 'conversation.input.plan')).toBe(false)
   })
 
   it('rolls the pending workspace label back when switching fails', async () => {

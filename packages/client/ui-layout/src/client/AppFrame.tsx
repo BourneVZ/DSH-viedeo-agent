@@ -276,7 +276,7 @@ export function AppFrame({
           {mode.panes.map((pane, index) => (
             <div key={pane.kind === 'conversation' ? 'conversation' : pane.pane} className={css.modePane} data-pane-index={index}>
               {pane.kind === 'conversation'
-                ? renderSlot('conversation', {})
+                ? renderSlot('conversation', pane.simple === undefined ? {} : { simple: pane.simple })
                 : renderSlot('shell.mode.pane', {}, { entryKey: pane.pane })}
             </div>
           ))}

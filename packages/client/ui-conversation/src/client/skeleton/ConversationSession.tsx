@@ -58,7 +58,7 @@ function equalBreadcrumbs(left: readonly Breadcrumb[], right: readonly Breadcrum
  */
 export function ConversationSessionHeader({
   sessionId, useSession, useSessions, useConversation, useConversationViews, useStore,
-  renderSlot, open, selectView, t,
+  renderSlot, open, selectView, simple = false, t,
 }: ConversationSessionHeaderProps) {
   const tabs = useConversationViews(value => value)
   const selectedId = useStore(s => s.view)
@@ -137,7 +137,7 @@ export function ConversationSessionHeader({
               {renderSlot('conversation.session.header.corner', {})}
             </div>
           </div>
-          {tabs.length > 1 && (
+          {tabs.length > 1 && !simple && (
             <div className={css.tabs} role="tablist">
               {tabs.map(viewTab => (
                 <button

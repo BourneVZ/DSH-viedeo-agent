@@ -13,11 +13,13 @@ import type { SlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
  *
  * `conversation` reuses the shipped conversation surface — the session header,
  * transcript, and composer — at a position the mode chooses, which is how a
- * mode keeps the real chat instead of restaging it. `pane` renders the
- * `shell.mode.pane` keyed cell the registering feature supplies.
+ * mode keeps the real chat instead of restaging it. `simple` asks that surface
+ * for its chat-only posture: no View tabs, no model seat, no composer tool row,
+ * just the transcript and one input. `pane` renders the `shell.mode.pane` keyed
+ * cell the registering feature supplies.
  */
 export type ShellPaneSpec =
-  | { kind: 'conversation' }
+  | { kind: 'conversation'; simple?: boolean }
   | { kind: 'pane'; pane: string }
 
 /** One alternative shell layout a feature plugin contributes. */

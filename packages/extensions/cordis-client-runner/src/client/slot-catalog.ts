@@ -87,7 +87,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     doc: 'The whole center column, across both the no-session hero and a live\nconversation. OCCUPIED by ui-conversation\'s ConversationRoot, which\ndeclares the session body, composer, and input seats inside it —\nregistering here replaces the entire conversation surface (and removes\nevery seat it declares) rather than adding to it.\n\nCurrent-session-optional: the occupant owns both states without\nchanging its React identity, so it keeps its own state across a session\nswitch. It receives no owner props; session facts arrive through the\nframework hooks of the `session-maybe` scope.',
     registerOptions: [],
     ownerProps: [
-      '/** Conversation owner share: business state and actions belong to the registrant. */\nexport interface ConvOwnerProps {}',
+      '/** Conversation owner share: business state and actions belong to the registrant. */\nexport interface ConvOwnerProps {\n  /**\n   * Render the conversation in its chat-only posture — no View tabs, no model\n   * seat, no composer tool row. An alternative shell mode asks for it through\n   * `{ kind: \'conversation\', simple: true }`; the frame\'s own center column\n   * leaves it unset and keeps the full surface.\n   */\n  simple?: boolean\n}',
     ],
     ownerPropsReferences: [],
     standardProps: [
@@ -426,7 +426,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     doc: 'Resident composer body, including the no-Session inert state.',
     registerOptions: [],
     ownerProps: [
-      '/** Owner share of the resident composer bar. */\nexport interface ComposerBarOwnerProps {\n  /** Hero uses centered placement; composer uses the active bottom placement. */\n  variant: \'hero\' | \'composer\'\n  /** A feature-owned reason that makes message input inert while leaving model selection live. */\n  blocked?: { readonly reason: string }\n  /** Lock all message actions while preserving the resident composer surface. */\n  disabled?: boolean\n  /** Whether the shared Workspace picker is expanded. */\n  workspacePickerOpen?: boolean\n  /** Open the Workspace picker from the inert composer surface. */\n  onRequestWorkspace?: () => void\n  placeholder?: string\n  /** Optional content rendered above the composer surface. */\n  accessory?: ReactNode\n}',
+      '/** Owner share of the resident composer bar. */\nexport interface ComposerBarOwnerProps {\n  /** Hero uses centered placement; composer uses the active bottom placement. */\n  variant: \'hero\' | \'composer\'\n  /**\n   * Chat-only posture: drop the composer tool row (commands, attach, plan,\n   * access) and the model seat, leaving the editor with its submit and stop\n   * actions. An alternative shell mode\'s simple conversation asks for it.\n   */\n  simple?: boolean\n  /** A feature-owned reason that makes message input inert while leaving model selection live. */\n  blocked?: { readonly reason: string }\n  /** Lock all message actions while preserving the resident composer surface. */\n  disabled?: boolean\n  /** Whether the shared Workspace picker is expanded. */\n  workspacePickerOpen?: boolean\n  /** Open the Workspace picker from the inert composer surface. */\n  onRequestWorkspace?: () => void\n  placeholder?: string\n  /** Optional content rendered above the composer surface. */\n  accessory?: ReactNode\n}',
     ],
     ownerPropsReferences: [
       'Workspace',
@@ -1042,7 +1042,9 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     summary: 'Strict per-Session title, actions, and View navigation.',
     doc: 'Strict per-Session title, actions, and View navigation.',
     registerOptions: [],
-    ownerProps: [],
+    ownerProps: [
+      '/** Owner share of the strict Session header. */\nexport interface ConversationHeaderOwnerProps {\n  /**\n   * Hide the View navigation tabs, leaving the title and actions. An\n   * alternative shell mode\'s chat-only conversation asks for it; the frame\'s\n   * own center column leaves it unset and keeps the tabs.\n   */\n  simple?: boolean\n}',
+    ],
     ownerPropsReferences: [],
     standardProps: [
       'useResource: UseResource',

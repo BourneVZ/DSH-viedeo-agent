@@ -47,7 +47,7 @@ export const InputBar = memo(function InputBar({
   renderSlot, useBusyEnter, useFileUploads, useNotices, useLexicon, useMenuLauncher,
   useProjection, sessionId, variant, disabled: inert = false, blocked,
   workspacePickerOpen = false, onRequestWorkspace,
-  placeholder, accessory,
+  placeholder, accessory, simple = false,
 }: InputBarProps) {
   const input = useInput(s => s)
   const notice = useNotices(s => s)
@@ -478,7 +478,7 @@ export const InputBar = memo(function InputBar({
           </div>
         </div>
         <div className={css.row}>
-          <div className={css.tools}>
+          {!simple && <div className={css.tools}>
             <Tooltip label={t('input.commands')} side="top" delayMs={500}>
               <button
                 type="button"
@@ -520,13 +520,13 @@ export const InputBar = memo(function InputBar({
             {input === undefined || sessionId === undefined
               ? null
               : renderSlot('conversation.input.left', {})}
-          </div>
+          </div>}
           <div className={css.trailing}>
-            {input === undefined || sessionId === undefined
+            {!simple && (input === undefined || sessionId === undefined
               ? null
-              : renderSlot('conversation.input.right', {})}
-            {sessionId === undefined ? null : renderSlot('conversation.input.model', { locked: modelSeatLocked })}
-            <ContextMeter useProjection={useProjection} t={t} />
+              : renderSlot('conversation.input.right', {}))}
+            {!simple && (sessionId === undefined ? null : renderSlot('conversation.input.model', { locked: modelSeatLocked }))}
+            {!simple && <ContextMeter useProjection={useProjection} t={t} />}
             {interruptible && (
               <Tooltip label={t('input.stop')} side="top" delayMs={500} disabled={stop === undefined}>
                 <button

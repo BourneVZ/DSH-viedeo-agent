@@ -41,6 +41,8 @@ kind: "package-reference"
 
 一次注册声明四个子slot并绑定 `ctx.layout` 的 `toggleSidebar`、`openRightbar(track, fullscreen)` 与 `closeRightbar`。store持有唯一的frame宽度测量、左右栏偏好及占用方报告的呈现状态。`rightbar` 的owner参数为实际 `width`、`viewportWidth` 与普通呈现的 `canShow`；占用方在空间不足时执行确定性的收起，变宽不自行重新展开。全屏隐藏宽度手柄，但不自行释放占用方要求保留的轨道。AppFrame 始终挂载会话与右栏；已连接 Session 经 `SessionProvider` 渲染，没有 Session 时右栏是一条空的零宽轨道。它把所选 Session 标题投影到构建配置的产品标题或本地化 `common.brand.localBuild` 回退值之上，因此 locale revision 会随根 entry 一起更新文档元数据。主题呈现器是第二个 effect：从解析后的快照做纯 DOM 写入——初始状态经 getter 读取一次，此后仅事件驱动，不经过 React。它先应用调色板、字号与 token 变量，再把渲染出的背景测量为唯一的颜色依据。 全屏呈现禁用网格和手柄过渡；占用方完全覆盖框架后才报告新的列宽。 退出全屏时，框架先保持无过渡并安装目标布局：关闭移除右轨道，恢复保留右轨道。后续普通几何操作恢复正常过渡。
 
+功能插件通过 `ctx.layout.registerShellMode(spec)` 贡献一个替代的整体 shell 布局，它返回撤消该布局的 disposer。只要注册了至少一个模式，框架就在默认布局旁绘制顶栏切换组件，而被选中的模式用该 spec 自身的 `columns` 与 `panes` 替换三栏网格。一个窗格要么是 `{ kind: 'pane'; pane: <key> }`——分派进 root 作用域 keyed slot [`shell.mode.pane`](../../../docs/subsystems/slots.zh.md)——要么是 `{ kind: 'conversation'; simple? }`——在模式选定位置重新渲染框架自身的 `conversation` slot；`simple: true` 通过对话 owner 参数传入纯聊天姿态，去掉视图标签页、模型席位与输入器工具行，只保留转录与一个输入框。框架不认识任何具体功能：它排布窗格并绘制切换组件，而不知道某模式的窗格内含什么。
+
 </details>
 
 -----

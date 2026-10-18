@@ -120,7 +120,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     /** Strict per-Session Conversation body. */
     'conversation.session': { kind: 'single'; scope: 'session' }
     /** Strict per-Session title, actions, and View navigation. */
-    'conversation.session.header': { kind: 'single'; scope: 'session' }
+    'conversation.session.header': { kind: 'single'; scope: 'session'; owner: ConversationHeaderOwnerProps }
     /** Optional replacement for one Session breadcrumb title. */
     'conversation.session.header.lineage': {
       kind: 'single'
@@ -227,6 +227,16 @@ export interface ConversationHeaderCornerOwnerProps {
   children?: never
 }
 
+/** Owner share of the strict Session header. */
+export interface ConversationHeaderOwnerProps {
+  /**
+   * Hide the View navigation tabs, leaving the title and actions. An
+   * alternative shell mode's chat-only conversation asks for it; the frame's
+   * own center column leaves it unset and keeps the tabs.
+   */
+  simple?: boolean
+}
+
 /** Plain breadcrumb data handed to the optional lineage renderer. */
 export interface ConversationHeaderLineageOwnerProps {
   /** Session represented by this breadcrumb title. */
@@ -288,6 +298,12 @@ export interface ConversationSessionHeaderInjected {
 export interface ComposerBarOwnerProps {
   /** Hero uses centered placement; composer uses the active bottom placement. */
   variant: 'hero' | 'composer'
+  /**
+   * Chat-only posture: drop the composer tool row (commands, attach, plan,
+   * access) and the model seat, leaving the editor with its submit and stop
+   * actions. An alternative shell mode's simple conversation asks for it.
+   */
+  simple?: boolean
   /** A feature-owned reason that makes message input inert while leaving model selection live. */
   blocked?: { readonly reason: string }
   /** Lock all message actions while preserving the resident composer surface. */

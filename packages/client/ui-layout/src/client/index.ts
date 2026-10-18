@@ -119,7 +119,15 @@ export interface SidebarOwnerProps {
 }
 
 /** Conversation owner share: business state and actions belong to the registrant. */
-export interface ConvOwnerProps {}
+export interface ConvOwnerProps {
+  /**
+   * Render the conversation in its chat-only posture — no View tabs, no model
+   * seat, no composer tool row. An alternative shell mode asks for it through
+   * `{ kind: 'conversation', simple: true }`; the frame's own center column
+   * leaves it unset and keeps the full surface.
+   */
+  simple?: boolean
+}
 
 /** Right column owner share: resolved normal geometry and opening eligibility. */
 export interface RightbarOwnerProps {
