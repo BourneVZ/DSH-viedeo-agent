@@ -1,7 +1,7 @@
 /**
  * Route coverage against a real local filesystem: project discovery over the
- * registered workspace roots, shot-asset resolution, and the media route's
- * byte-window and fence behavior.
+ * registered workspace roots, shot-asset resolution, the producing-session
+ * route's answers, and the media route's byte-window and fence behavior.
  */
 
 import { mkdir, mkdtemp, realpath, rm, utimes, writeFile } from 'node:fs/promises'
@@ -11,9 +11,34 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { LocalFileSystem } from '@deepseek-ai/dsh-fs-local'
 import * as VideoProject from '../src/index.ts'
-import type { VideoProjectListResponse, VideoProjectResponse } from '../src/types.ts'
+import type {
+  VideoProjectListResponse, VideoProjectResponse, VideoProjectSessionResponse,
+} from '../src/types.ts'
 
 type Handler = (request: Request) => Promise<Response>
+
+/** One seeded session corpus row. */
+interface CorpusRow {
+  /** Session id. */
+  id: string
+  /** Workspace root the session recorded. */
+  cwd: string
+  /** Whether its log holds a hit for whatever the route asks. */
+  hit: boolean
+}
+
+/**
+ * Fake the session corpus the producing-session route reads.
+ * @param rows - one row per session in the corpus.
+ * @returns the service face.
+ */
+function corpus(rows: readonly CorpusRow[] = []) {
+  return {
+    listSessions: async () => rows.map(({ id, cwd }) => ({ header: { id, cwd }, live: false, persisted: true })),
+    searchEvents: async ({ sessionId }: { sessionId: string }) =>
+      ({ items: rows.some(row => row.id === sessionId && row.hit) ? [{ event: {} }] : [] }),
+  } as never
+}
 
 let root: string
 const contexts: Context[] = []
@@ -30,12 +55,13 @@ afterEach(async () => {
 })
 
 /**
- * Mount the plugin over the real local filesystem with a fake transport carrier
- * and a workspace registry naming the fixture root.
+ * Mount the plugin over the real local filesystem with a fake transport carrier,
+ * a fake session corpus, and a workspace registry naming the fixture root.
  * @param config - plugin config overrides.
+ * @param sessions - session corpus rows the producing-session route sees.
  * @returns route callers and the disposer observation point.
  */
-async function mount(config: Partial<VideoProject.Config> = {}) {
+async function mount(config: Partial<VideoProject.Config> = {}, sessions: readonly CorpusRow[] = []) {
   const ctx = new Context()
   contexts.push(ctx)
   const routes = new Map<string, Handler>()
@@ -49,6 +75,7 @@ async function mount(config: Partial<VideoProject.Config> = {}) {
     },
   } as never)
   ctx.provide('workspaceRegistry', { list: () => [{ path: root }] } as never)
+  ctx.provide('sessionQuery', corpus(sessions))
   await ctx.plugin(LocalFileSystem, { cwd: root }).await()
   await ctx.plugin(VideoProject, config as VideoProject.Config).await()
   const call = (path: string, query: string, init?: RequestInit): Promise<Response> => {
@@ -62,6 +89,8 @@ async function mount(config: Partial<VideoProject.Config> = {}) {
       await (await call('/api/video/projects', '')).json() as VideoProjectListResponse,
     project: async (path: string): Promise<Response> =>
       await call('/api/video/project', `?path=${encodeURIComponent(path)}`),
+    session: async (path: string): Promise<Response> =>
+      await call('/api/video/project-session', `?path=${encodeURIComponent(path)}`),
     media: (path: string, init?: RequestInit): Promise<Response> =>
       call('/api/video/media', `?path=${encodeURIComponent(path)}`, init),
   }
@@ -179,6 +208,32 @@ describe('/api/video/project', () => {
   })
 })
 
+describe('/api/video/project-session', () => {
+  it('answers with the session whose log references the project', async () => {
+    const { a } = await seed()
+    const route = await mount({}, [
+      { id: 'sess-old', cwd: root, hit: false },
+      { id: 'sess-new', cwd: root, hit: true },
+    ])
+    const body = await (await route.session(a)).json() as VideoProjectSessionResponse
+    expect(body).toEqual({ sessionId: 'sess-new' })
+  })
+
+  it('answers null when no session references the project', async () => {
+    const { a } = await seed()
+    const route = await mount({}, [{ id: 'sess-1', cwd: root, hit: false }])
+    const body = await (await route.session(a)).json() as VideoProjectSessionResponse
+    expect(body).toEqual({ sessionId: null })
+  })
+
+  it('rejects a missing path and an unknown project', async () => {
+    const { a } = await seed()
+    const route = await mount()
+    expect((await route.session('')).status).toBe(400)
+    expect((await route.session(join(a, 'assets'))).status).toBe(404)
+  })
+})
+
 describe('/api/video/media', () => {
   it('serves a whole file with its media type and range advertisement', async () => {
     const { a } = await seed()
@@ -255,7 +310,7 @@ describe('route lifetime', () => {
   it('removes every route when the plugin fiber is disposed', async () => {
     await seed()
     const route = await mount()
-    expect(route.routes.size).toBe(3)
+    expect(route.routes.size).toBe(4)
     const ctx = contexts[contexts.length - 1]
     if (ctx === undefined) throw new Error('context not mounted')
     await ctx.fiber.dispose()

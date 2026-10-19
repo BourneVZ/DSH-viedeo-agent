@@ -1,10 +1,11 @@
 /**
  * @deepseek-ai/dsh-host-video-project — the Web GUI's video-production data
  * plane. It discovers the `script.json` video projects under every registered
- * workspace and serves three authenticated routes below `/api/video`: the
- * project list, one project's resolved shot timeline, and the media bytes a
- * timeline cell or the preview player references. It contributes no Cordis
- * service and no model-facing tool; the browser half is its only consumer.
+ * workspace and serves authenticated routes below `/api/video`: the project
+ * list, one project's resolved shot timeline, the media bytes a timeline cell or
+ * the preview player references, and the session that produced one project. It
+ * contributes no Cordis service and no model-facing tool; the browser half is
+ * its only consumer.
  * @module @deepseek-ai/dsh-host-video-project
  */
 
@@ -12,10 +13,12 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-client-connection'
 import type {} from '@deepseek-ai/dsh-fs'
+import type {} from '@deepseek-ai/dsh-session-query'
 import type {} from '@deepseek-ai/dsh-workspace'
-import { listSummaries, locateProject, readProject } from './discovery.ts'
+import { listSummaries, locateProject, readProject, type ProjectLocation } from './discovery.ts'
 import { serveMedia } from './media.ts'
-import type { VideoProjectListResponse, VideoProjectResponse } from './types.ts'
+import { findProducingSession } from './session-match.ts'
+import type { VideoProjectListResponse, VideoProjectResponse, VideoProjectSessionResponse } from './types.ts'
 
 export type * from './types.ts'
 export { SCRIPT_FILE } from './discovery.ts'
@@ -23,8 +26,8 @@ export { SCRIPT_FILE } from './discovery.ts'
 /** Stable Cordis plugin name. */
 export const name = 'video-project'
 
-/** Services the routes read: the transport carrier, the filesystem, and the workspace roots. */
-export const inject = ['connection', 'fs', 'workspaceRegistry']
+/** Services the routes read: the transport carrier, the filesystem, the workspace roots, and the session corpus. */
+export const inject = ['connection', 'fs', 'workspaceRegistry', 'sessionQuery']
 
 /** Default directory levels walked below each workspace root. */
 const DEFAULT_SCAN_DEPTH = 3
@@ -61,13 +64,24 @@ function json(body: unknown, status = 200): Response {
 }
 
 /**
- * Claim the three `/api/video` routes for as long as this plugin is mounted.
- * @param ctx - plugin context carrying the connection, filesystem, and workspace services.
+ * Claim the `/api/video` routes for as long as this plugin is mounted.
+ * @param ctx - plugin context carrying the connection, filesystem, workspace, and session-query services.
  * @param config - validated {@link Config}.
  */
 export function apply(ctx: Context, config: Config): void {
   const { scanDepth, maxMediaBytes } = config
   const roots = (): string[] => ctx.workspaceRegistry.list().map(workspace => workspace.path)
+
+  /**
+   * Resolve one project-path query parameter against the registered workspaces.
+   * @param request - the incoming request.
+   * @returns the located project, or the response refusing the request.
+   */
+  const locateOrRefuse = async (request: Request): Promise<ProjectLocation | Response> => {
+    const path = new URL(request.url).searchParams.get('path')
+    if (path === null || path.length === 0) return json({ error: 'missing path' }, 400)
+    return await locateProject(ctx.fs, roots(), path) ?? json({ error: 'unknown video project' }, 404)
+  }
 
   ctx.effect(() => {
     const disposers = [
@@ -86,11 +100,9 @@ export function apply(ctx: Context, config: Config): void {
         methods: ['GET'],
         requestBody: 'buffered',
         fetch: async (request): Promise<Response> => {
-          const path = new URL(request.url).searchParams.get('path')
-          if (path === null || path.length === 0) return json({ error: 'missing path' }, 400)
-          const location = await locateProject(ctx.fs, roots(), path)
-          if (location === undefined) return json({ error: 'unknown video project' }, 404)
-          const body: VideoProjectResponse = { project: await readProject(ctx.fs, location) }
+          const located = await locateOrRefuse(request)
+          if (located instanceof Response) return located
+          const body: VideoProjectResponse = { project: await readProject(ctx.fs, located) }
           return json(body)
         },
       }),
@@ -99,6 +111,18 @@ export function apply(ctx: Context, config: Config): void {
         methods: ['GET', 'HEAD'],
         requestBody: 'buffered',
         fetch: request => serveMedia(request, ctx.fs, roots(), maxMediaBytes),
+      }),
+      ctx.connection.fetch.register({
+        path: '/api/video/project-session',
+        methods: ['GET'],
+        requestBody: 'buffered',
+        fetch: async (request): Promise<Response> => {
+          const located = await locateOrRefuse(request)
+          if (located instanceof Response) return located
+          const sessionId = await findProducingSession(ctx.fs, ctx.sessionQuery, located)
+          const body: VideoProjectSessionResponse = { sessionId }
+          return json(body)
+        },
       }),
     ]
     return () => {

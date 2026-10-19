@@ -954,19 +954,19 @@ Source: [`packages/host/open-in-app/src/index.ts:50`](../packages/host/open-in-a
 
 ## `@deepseek-ai/dsh-host-video-project`
 
-Requires: `connection` · `fs` · `workspaceRegistry`
+Requires: `connection` · `fs` · `workspaceRegistry` · `sessionQuery`
 
 ```ts config-catalog
 /** Plugin configuration. */
 export interface Config {
   /** Directory levels walked below each workspace root while looking for `script.json`. */
-  scanDepth?: number
+  scanDepth: number
   /** Inclusive byte ceiling on one `/api/video/media` response. */
-  maxMediaBytes?: number
+  maxMediaBytes: number
 }
 ```
 
-Source: [`packages/host/video-project/src/index.ts:36`](../packages/host/video-project/src/index.ts)
+Source: [`packages/host/video-project/src/index.ts:39`](../packages/host/video-project/src/index.ts)
 
 <a id="deepseek-aidsh-host-webserver"></a>
 

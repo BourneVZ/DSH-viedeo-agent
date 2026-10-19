@@ -5,6 +5,8 @@
  * @module @deepseek-ai/dsh-host-video-project/types
  */
 
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
+
 /** The visual kind a shot declares for itself in `script.json`. */
 export type ShotVisualType = 'html' | 'image' | 'unknown'
 
@@ -70,4 +72,10 @@ export interface VideoProjectListResponse {
 export interface VideoProjectResponse {
   /** The requested project with its resolved shot list. */
   project: VideoProject
+}
+
+/** Response body of `GET /api/video/project-session`. */
+export interface VideoProjectSessionResponse {
+  /** Newest session whose log references the project directory, or null when none does. */
+  sessionId: SessionId | null
 }
