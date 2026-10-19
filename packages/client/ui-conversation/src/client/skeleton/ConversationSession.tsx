@@ -133,9 +133,13 @@ export function ConversationSessionHeader({
             <div className={css.headerUtilities}>
               {renderSlot('conversation.session.header.utilities', {})}
             </div>
-            <div className={css.headerCorner} data-conversation-header-corner="">
-              {renderSlot('conversation.session.header.corner', {})}
-            </div>
+            {/* The corner seat expands the frame's rightbar; a chat-only surface
+                has no panel chrome to expand, so the seat stays unrendered. */}
+            {!simple && (
+              <div className={css.headerCorner} data-conversation-header-corner="">
+                {renderSlot('conversation.session.header.corner', {})}
+              </div>
+            )}
           </div>
           {tabs.length > 1 && !simple && (
             <div className={css.tabs} role="tablist">

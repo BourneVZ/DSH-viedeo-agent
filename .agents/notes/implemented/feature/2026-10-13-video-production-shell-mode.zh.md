@@ -12,7 +12,7 @@ video preset（`packages/preset/agent-presets/presets/video`）组成了一个�
 
 web GUI 获得一个替代 shell 模式的扩展点，视频界面则在其上以三个包加一个组合包与一个 profile 构建。
 
-`dsh-client-ui-layout` 拥有该机制：功能插件通过 `ctx.layout.registerShellMode` 注册一个 `ShellModeSpec`，框架在默认布局旁绘制顶栏切换组件，并在某模式被选中时用该 spec 自身的窗格行替换三栏网格。框架不认识任何具体功能。spec 的窗格要么是 `{ kind: 'conversation' }`——在模式选定位置重新渲染框架自身的 `conversation` slot，并可选 `simple: true` 以采用纯聊天姿态，去掉视图标签页、模型席位与输入器工具行，只保留转录与一个输入框——要么是 `{ kind: 'pane'; pane: <key> }`——分派进一个新的 root 作用域 keyed slot `shell.mode.pane`。复用 `conversation` slot 是关键选择：视频模式借此保留真实的会话头部、转录与输入器——气泡 Markdown、可折叠中间步骤，以及运行该会话 agent preset 的输入器——而非功能插件须自行维护的副本。
+`dsh-client-ui-layout` 拥有该机制：功能插件通过 `ctx.layout.registerShellMode` 注册一个 `ShellModeSpec`，框架在默认布局旁绘制顶栏切换组件，并在某模式被选中时用该 spec 自身的窗格行替换三栏网格。框架不认识任何具体功能。spec 的窗格要么是 `{ kind: 'conversation' }`——在模式选定位置重新渲染框架自身的 `conversation` slot，并可选 `simple: true` 以采用纯聊天姿态，去掉视图标签页、模型席位、输入器工具行与头部角落席位，只保留转录与一个输入框——要么是 `{ kind: 'pane'; pane: <key> }`——分派进一个新的 root 作用域 keyed slot `shell.mode.pane`。复用 `conversation` slot 是关键选择：视频模式借此保留真实的会话头部、转录与输入器——气泡 Markdown、可折叠中间步骤，以及运行该会话 agent preset 的输入器——而非功能插件须自行维护的副本。
 
 `dsh-host-video-project` 是数据面：它在已注册工作区下发现每个含 `script.json` 的目录，并提供 `/api/video` 下三条受认证路由（项目列表、单个项目已解析的分镜时间轴、支持 Range 的媒体字节）。它不注册 Cordis 服务，也不注册面向模型的工具；浏览器半侧是其唯一消费者。
 

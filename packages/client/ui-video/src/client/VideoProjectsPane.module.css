@@ -101,7 +101,7 @@
   padding: 0 5px;
   border-radius: 5px;
   corner-shape: round;
-  background: var(--dsw-alias-fill-l2);
+  background: var(--dsw-alias-bg-layer-2);
   color: var(--dsw-alias-label-secondary);
   font-size: 11px;
   line-height: 16px;

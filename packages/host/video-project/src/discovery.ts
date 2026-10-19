@@ -180,7 +180,6 @@ async function findRender(fs: FileSystem, location: ProjectLocation): Promise<st
   }
   if (candidates.length === 0) return undefined
   const timed = await Promise.all(candidates.map(async path => ({ path, at: await modifiedAt(path) })))
-  timed.sort((left, right) => right.at - left.at)
   return timed.reduce((best, item) => (item.at > best.at ? item : best)).path
 }
 

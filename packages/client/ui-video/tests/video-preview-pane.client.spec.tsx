@@ -126,9 +126,9 @@ describe('VideoPreviewPane', () => {
       detailStatus: 'ready', project: project({ shots: [shot({ duration: 4 })] }), viewMode: 'preview',
     })} />)
     const surface = scrub(container) as HTMLElement
-    expect(surface.style.width).toBe(`${72 + 4 * 40}px`)
+    expect(surface.style.width).toBe(`${84 + 4 * 40}px`)
     fireEvent.click(screen.getByRole('button', { name: zh['timeline.zoomIn'] }))
-    expect(surface.style.width).toBe(`${72 + 4 * 60}px`)
+    expect(surface.style.width).toBe(`${84 + 4 * 60}px`)
   })
 
   it('shrinks the tracks through the zoom-out control', () => {
@@ -137,16 +137,16 @@ describe('VideoPreviewPane', () => {
     })} />)
     const surface = scrub(container) as HTMLElement
     fireEvent.click(screen.getByRole('button', { name: zh['timeline.zoomOut'] }))
-    expect(surface.style.width).toBe(`${72 + 4 * (40 / 1.5)}px`)
+    expect(surface.style.width).toBe(`${84 + 4 * (40 / 1.5)}px`)
   })
 
   it('moves the playhead when the timeline is scrubbed', () => {
     const { container } = render(<VideoPreviewPane {...props({
       detailStatus: 'ready', project: project({ shots: [shot({ duration: 4 })] }), viewMode: 'preview',
     })} />)
-    // jsdom reports a zero origin, so 72px of gutter plus two seconds at 40px/s
+    // jsdom reports a zero origin, so 84px of gutter plus two seconds at 40px/s
     // lands the drag at the two-second mark.
-    fireEvent.pointerDown(scrub(container), { clientX: 72 + 2 * 40 })
+    fireEvent.pointerDown(scrub(container), { clientX: 84 + 2 * 40 })
     expect(screen.getByRole('timer').textContent).toBe('00:02')
   })
 

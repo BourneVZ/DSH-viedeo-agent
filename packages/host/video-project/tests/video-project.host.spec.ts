@@ -35,7 +35,7 @@ afterEach(async () => {
  * @param config - plugin config overrides.
  * @returns route callers and the disposer observation point.
  */
-async function mount(config: Record<string, unknown> = {}) {
+async function mount(config: Partial<VideoProject.Config> = {}) {
   const ctx = new Context()
   contexts.push(ctx)
   const routes = new Map<string, Handler>()
@@ -50,7 +50,7 @@ async function mount(config: Record<string, unknown> = {}) {
   } as never)
   ctx.provide('workspaceRegistry', { list: () => [{ path: root }] } as never)
   await ctx.plugin(LocalFileSystem, { cwd: root }).await()
-  await ctx.plugin(VideoProject, config).await()
+  await ctx.plugin(VideoProject, config as VideoProject.Config).await()
   const call = (path: string, query: string, init?: RequestInit): Promise<Response> => {
     const handler = routes.get(path)
     if (handler === undefined) throw new Error(`route ${path} not registered`)
@@ -159,11 +159,23 @@ describe('/api/video/project', () => {
   })
 
   it('rejects a missing path, an unknown project, and a path outside every workspace', async () => {
-    await seed()
+    const { a } = await seed()
     const route = await mount()
     expect((await route.project('')).status).toBe(400)
     expect((await route.project(join(root, 'absent'))).status).toBe(404)
     expect((await route.project(tmpdir())).status).toBe(404)
+    expect((await route.project(join(a, 'assets'))).status).toBe(404)
+  })
+
+  it('answers a broken script with empty shots and a renderless project without a render', async () => {
+    const { b, broken } = await seed()
+    const route = await mount()
+    const { project: brokenProject } = await (await route.project(broken)).json() as VideoProjectResponse
+    expect(brokenProject).toMatchObject({ summary: '', duration: 0, shots: [] })
+    expect(brokenProject.error).toContain('not valid JSON')
+    const { project: renderless } = await (await route.project(b)).json() as VideoProjectResponse
+    expect(renderless.summary).toBe('')
+    expect(renderless.render).toBeUndefined()
   })
 })
 

@@ -59,6 +59,58 @@ describe('parseScript', () => {
     })
   })
 
+  it('prefers the measured duration spellings a rendered project carries', () => {
+    const result = parseScript(JSON.stringify({
+      shots: [
+        {
+          id: 's1', actualDuration: 24.8, estimatedDuration: 20, startTime: 0, endTime: 99,
+          imageSrc: 'i/1.png', audioPath: 'a/1.wav',
+        },
+        { id: 's2', audioDuration: '12.5' },
+      ],
+    }))
+    expect(result).toEqual({
+      ok: true,
+      script: {
+        shots: [
+          {
+            id: 's1', description: '', narration: '', duration: 24.8, visualType: 'unknown',
+            image: 'i/1.png', audio: 'a/1.wav',
+          },
+          { id: 's2', description: '', narration: '', duration: 12.5, visualType: 'unknown' },
+        ],
+      },
+    })
+  })
+
+  it('falls back to the span the start and end offsets enclose', () => {
+    const result = parseScript(JSON.stringify({
+      shots: [
+        { id: 's1', startTime: 0, endTime: 24.8 },
+        { id: 's2', startTime: '24.8', endTime: '40' },
+        { id: 's3', startTime: 10, endTime: 10 },
+        { id: 's4', startTime: -5, endTime: 9 },
+        { id: 's5', startTime: 'x', endTime: 5 },
+        { id: 's6', endTime: 5 },
+        { id: 's7', startTime: 2 },
+      ],
+    }))
+    expect(result).toEqual({
+      ok: true,
+      script: {
+        shots: [
+          { id: 's1', description: '', narration: '', duration: 24.8, visualType: 'unknown' },
+          { id: 's2', description: '', narration: '', duration: 15.2, visualType: 'unknown' },
+          { id: 's3', description: '', narration: '', duration: 0, visualType: 'unknown' },
+          { id: 's4', description: '', narration: '', duration: 0, visualType: 'unknown' },
+          { id: 's5', description: '', narration: '', duration: 0, visualType: 'unknown' },
+          { id: 's6', description: '', narration: '', duration: 0, visualType: 'unknown' },
+          { id: 's7', description: '', narration: '', duration: 0, visualType: 'unknown' },
+        ],
+      },
+    })
+  })
+
   it('maps an unrecognized visual kind to unknown and drops unusable declarations', () => {
     const result = parseScript(JSON.stringify({
       shots: [

@@ -35,9 +35,9 @@ const DEFAULT_MAX_MEDIA_BYTES = 512 * 1024 * 1024
 /** Plugin configuration. */
 export interface Config {
   /** Directory levels walked below each workspace root while looking for `script.json`. */
-  scanDepth?: number
+  scanDepth: number
   /** Inclusive byte ceiling on one `/api/video/media` response. */
-  maxMediaBytes?: number
+  maxMediaBytes: number
 }
 
 export const Config: z<Config> = z.object({
@@ -66,8 +66,7 @@ function json(body: unknown, status = 200): Response {
  * @param config - validated {@link Config}.
  */
 export function apply(ctx: Context, config: Config): void {
-  const scanDepth = config.scanDepth ?? DEFAULT_SCAN_DEPTH
-  const maxMediaBytes = config.maxMediaBytes ?? DEFAULT_MAX_MEDIA_BYTES
+  const { scanDepth, maxMediaBytes } = config
   const roots = (): string[] => ctx.workspaceRegistry.list().map(workspace => workspace.path)
 
   ctx.effect(() => {

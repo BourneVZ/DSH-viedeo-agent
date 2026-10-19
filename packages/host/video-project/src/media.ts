@@ -43,8 +43,8 @@ export function parseRange(header: string | null, size: number): ByteWindow | nu
   if (header === null) return null
   const match = /^bytes=(\d*)-(\d*)$/u.exec(header.trim())
   if (match === null) return null
-  const rawStart = match[1] ?? ''
-  const rawEnd = match[2] ?? ''
+  // Both capture groups are `\d*`, so a successful match always carries them.
+  const [, rawStart, rawEnd] = match as unknown as [string, string, string]
   if (rawStart === '' && rawEnd === '') return null
   if (rawStart === '') {
     const suffix = Number.parseInt(rawEnd, 10)

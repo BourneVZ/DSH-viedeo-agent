@@ -17,7 +17,7 @@ import { NS } from './locales.ts'
 import css from './VideoTimeline.module.css'
 
 /** Fixed label gutter every row shares, keeping ruler and tracks aligned. */
-const GUTTER = 72
+const GUTTER = 84
 
 /** Props of the timeline: geometry, the playhead, and the pane's callbacks. */
 export interface VideoTimelineProps {
@@ -52,7 +52,7 @@ export interface VideoTimelineProps {
 /** One labelled track row: a sticky gutter beside a positioned content strip. */
 function TrackRow(props: { label: string; width: number; children: ReactNode }) {
   return (
-    <div className={css.row}>
+    <div className={clsx(css.row, css.track)}>
       <div className={css.gutter}>{props.label}</div>
       <div className={css.content} style={{ width: `${props.width}px` }}>{props.children}</div>
     </div>
@@ -148,7 +148,7 @@ export function VideoTimeline({
             {segments.map(segment => (
               <div
                 key={segment.shot.id}
-                className={css.cell}
+                className={clsx(css.cell, css.cellSubtitle)}
                 style={{ left: `${secondsToPx(segment.start, pxPerSecond)}px`, width: `${secondsToPx(segment.duration, pxPerSecond)}px` }}
               >
                 <span className={css.subtitleText}>{segment.shot.narration}</span>
@@ -162,7 +162,7 @@ export function VideoTimeline({
               return (
                 <div
                   key={segment.shot.id}
-                  className={css.cell}
+                  className={clsx(css.cell, css.cellVisual)}
                   style={{ left: `${secondsToPx(segment.start, pxPerSecond)}px`, width: `${secondsToPx(segment.duration, pxPerSecond)}px` }}
                 >
                   {still === undefined
@@ -180,7 +180,7 @@ export function VideoTimeline({
               return (
                 <div
                   key={segment.shot.id}
-                  className={css.cell}
+                  className={clsx(css.cell, css.cellAudio)}
                   style={{ left: `${secondsToPx(segment.start, pxPerSecond)}px`, width: `${secondsToPx(segment.duration, pxPerSecond)}px` }}
                 >
                   {bars === undefined || bars.length === 0

@@ -595,6 +595,10 @@ describe('ConversationRoot resident composer', () => {
     // mount's container because cleanup only runs between tests, not mounts.
     const simple = mount(sessionSnapshotOf(), undefined, undefined, { viewTabs, simple: true })
     expect(within(simple.view.container).queryByRole('tablist')).toBeNull()
+    // The header's corner seat expands the frame's rightbar: panel chrome the
+    // chat-only posture drops along with the tabs.
+    expect(ordinary.slotCalls).toContain('conversation.session.header.corner')
+    expect(simple.slotCalls).not.toContain('conversation.session.header.corner')
   })
 
   it('chat-only posture drops the model seat and the composer tool row', () => {

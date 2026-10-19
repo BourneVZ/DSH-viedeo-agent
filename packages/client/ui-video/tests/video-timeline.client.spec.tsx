@@ -14,7 +14,7 @@ import { mediaUrl, shot } from './fixtures.ts'
 
 const t: VideoTimelineProps['t'] = makeTranslate(zh)
 const origin = window.location.origin
-const GUTTER = 72
+const GUTTER = 84
 
 afterEach(() => {
   cleanup()
@@ -137,16 +137,16 @@ describe('VideoTimeline', () => {
     const onScrub = vi.fn()
     const { container } = render(<VideoTimeline {...props({ onScrub, pxPerSecond: 10, total: 4 })} />)
     const surface = inner(container)
-    fireEvent.pointerMove(surface, { clientX: 92 })
+    fireEvent.pointerMove(surface, { clientX: 104 })
     expect(onScrub).not.toHaveBeenCalled()
-    fireEvent.pointerDown(surface, { clientX: 84 })
+    fireEvent.pointerDown(surface, { clientX: 96 })
     expect(onScrub).toHaveBeenLastCalledWith(1.2)
-    fireEvent.pointerMove(surface, { clientX: 94 })
+    fireEvent.pointerMove(surface, { clientX: 106 })
     expect(onScrub).toHaveBeenLastCalledWith(2.2)
     fireEvent.pointerUp(surface)
-    fireEvent.pointerMove(surface, { clientX: 104 })
+    fireEvent.pointerMove(surface, { clientX: 116 })
     expect(onScrub).toHaveBeenCalledTimes(2)
-    fireEvent.pointerDown(surface, { clientX: 84 })
+    fireEvent.pointerDown(surface, { clientX: 96 })
     fireEvent.pointerCancel(surface)
     fireEvent.pointerLeave(surface)
     expect(onScrub).toHaveBeenCalledTimes(3)

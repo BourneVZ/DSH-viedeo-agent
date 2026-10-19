@@ -168,7 +168,7 @@ root
 └─ shell.overlay
 ```
 
-`shell.mode.pane` 是框架为替代 shell 模式声明的一个 root 作用域 keyed slot。功能插件通过 `ctx.layout.registerShellMode` 注册一个模式；当该模式被选中时，框架用该模式自身的窗格行替换三栏网格，并通过 `shell.mode.pane` 渲染每个具名窗格，由模式 spec 命名的窗格 key 进行分派。模式的 `conversation` 窗格改为重新渲染框架自身的 `conversation` slot，因此真实会话界面被复用而非重新搭建；可选的 `simple: true` 以纯聊天姿态渲染它，去掉视图标签页、模型席位与输入器工具行，只保留转录与一个输入框。该 slot 只在模式主体渲染期间存活，故功能插件用 `ctx.slots.inject` 填充它。[`dsh-client-ui-video`](../../packages/client/ui-video/README.zh.md) 是已发布的 occupant，注册 `projects` 与 `preview` 窗格。
+`shell.mode.pane` 是框架为替代 shell 模式声明的一个 root 作用域 keyed slot。功能插件通过 `ctx.layout.registerShellMode` 注册一个模式；当该模式被选中时，框架用该模式自身的窗格行替换三栏网格，并通过 `shell.mode.pane` 渲染每个具名窗格，由模式 spec 命名的窗格 key 进行分派。模式的 `conversation` 窗格改为重新渲染框架自身的 `conversation` slot，因此真实会话界面被复用而非重新搭建；可选的 `simple: true` 以纯聊天姿态渲染它，去掉视图标签页、模型席位、输入器工具行与头部角落席位，只保留转录与一个输入框。该 slot 只在模式主体渲染期间存活，故功能插件用 `ctx.slots.inject` 填充它。[`dsh-client-ui-video`](../../packages/client/ui-video/README.zh.md) 是已发布的 occupant，注册 `projects` 与 `preview` 窗格。
 
 生成的 Client inspect catalog 是每个 key 的完整参考，包含 cardinality、scope、owner props、标准 props、当前 occupant、声明 owner 与替换风险。运行中的动态包可以用 `cordis_inspect what:"client"` 查询实时树与某个精确 key；源码 catalog 由 `pnpm run gen-client-catalog` 根据 `SlotMap` 声明和 `slots.register()` 调用点生成。
 

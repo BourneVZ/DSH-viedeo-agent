@@ -52,9 +52,16 @@ const SHOTS_KEYS = ['shots', 'scenes', 'shotList', '分镜', '镜头']
 const SHOT_ID_KEYS = ['id', 'shotId', 'name', '编号']
 const SHOT_DESCRIPTION_KEYS = ['description', 'visual', 'visualDescription', 'scene', '画面描述', '画面', '画面内容', '描述']
 const SHOT_NARRATION_KEYS = ['narration', 'voiceover', 'subtitle', 'text', 'line', '旁白', '字幕', '台词']
-const SHOT_DURATION_KEYS = ['duration', 'durationSeconds', 'seconds', 'length', '预计时长', '时长']
+// Measured spellings first: a project that has been rendered or linted carries
+// the duration its shots actually ran, which is what the timeline must place.
+const SHOT_DURATION_KEYS = [
+  'actualDuration', 'audioDuration', 'estimatedDuration',
+  'duration', 'durationSeconds', 'seconds', 'length', '预计时长', '时长',
+]
+const SHOT_START_KEYS = ['startTime', 'start', '开始']
+const SHOT_END_KEYS = ['endTime', 'end', '结束']
 const SHOT_VISUAL_TYPE_KEYS = ['visualType', 'type', 'kind', 'visual', '视觉类型', '类型']
-const SHOT_IMAGE_KEYS = ['image', 'imagePath', 'imageUrl', 'src', '图片', '画面文件']
+const SHOT_IMAGE_KEYS = ['image', 'imagePath', 'imageUrl', 'imageSrc', 'src', '图片', '画面文件']
 const SHOT_THUMBNAIL_KEYS = ['thumbnail', 'thumb', 'snapshot', 'poster', 'preview', '缩略图', '快照']
 const SHOT_AUDIO_KEYS = ['audio', 'audioPath', 'narrationAudio', 'voice', 'speech', '音频', '旁白音频']
 
@@ -63,12 +70,11 @@ export const SKIPPED_DIRECTORY_NAMES: ReadonlySet<string> = new Set(['node_modul
 
 /**
  * Read the first present key from an object, in alias priority order.
- * @param source - object to read, or a non-object when the file nests oddly.
+ * @param source - object to read.
  * @param keys - alias list, highest priority first.
  * @returns the first value whose key is present, or undefined.
  */
-function pick(source: unknown, keys: readonly string[]): unknown {
-  if (typeof source !== 'object' || source === null) return undefined
+function pick(source: object, keys: readonly string[]): unknown {
   const record = source as Record<string, unknown>
   for (const key of keys) {
     if (record[key] !== undefined) return record[key]
@@ -88,14 +94,37 @@ function toText(value: unknown): string {
 }
 
 /**
+ * Coerce a declared offset (a start or an end, in seconds) to a number.
+ * @param value - raw JSON value; a string carries a number an agent quoted.
+ * @returns the finite non-negative offset, or undefined when unusable or absent.
+ */
+function toOffset(value: unknown): number | undefined {
+  const parsed = typeof value === 'string' ? Number.parseFloat(value) : value
+  if (typeof parsed !== 'number' || !Number.isFinite(parsed) || parsed < 0) return undefined
+  return parsed
+}
+
+/**
  * Coerce a declared duration to seconds.
  * @param value - raw JSON value; a string carries a number an agent quoted.
  * @returns the finite positive duration, or 0 when the declaration is unusable.
  */
 function toDuration(value: unknown): number {
-  const parsed = typeof value === 'string' ? Number.parseFloat(value) : value
-  if (typeof parsed !== 'number' || !Number.isFinite(parsed) || parsed <= 0) return 0
-  return parsed
+  const parsed = toOffset(value)
+  return parsed === undefined || parsed <= 0 ? 0 : parsed
+}
+
+/**
+ * The span a shot's declared start and end offsets enclose, for a script that
+ * places shots absolutely instead of declaring how long each one runs.
+ * @param entry - raw shot object.
+ * @returns `end - start` in seconds when both offsets declare and order, else 0.
+ */
+function spanOf(entry: object): number {
+  const start = toOffset(pick(entry, SHOT_START_KEYS))
+  const end = toOffset(pick(entry, SHOT_END_KEYS))
+  if (start === undefined || end === undefined || end <= start) return 0
+  return end - start
 }
 
 /**
@@ -124,11 +153,12 @@ function toShot(entry: unknown, index: number): RawShot | undefined {
   const image = toText(pick(entry, SHOT_IMAGE_KEYS))
   const thumbnail = toText(pick(entry, SHOT_THUMBNAIL_KEYS))
   const audio = toText(pick(entry, SHOT_AUDIO_KEYS))
+  const declared = toDuration(pick(entry, SHOT_DURATION_KEYS))
   return {
     id: id.length > 0 ? id : `shot-${index + 1}`,
     description: toText(pick(entry, SHOT_DESCRIPTION_KEYS)),
     narration: toText(pick(entry, SHOT_NARRATION_KEYS)),
-    duration: toDuration(pick(entry, SHOT_DURATION_KEYS)),
+    duration: declared > 0 ? declared : spanOf(entry),
     visualType: toVisualType(pick(entry, SHOT_VISUAL_TYPE_KEYS)),
     ...image.length > 0 ? { image } : {},
     ...thumbnail.length > 0 ? { thumbnail } : {},
