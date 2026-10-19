@@ -76,4 +76,11 @@ describe('dsh-video-app bundle', () => {
     expect(presets?.name).toBe('@deepseek-ai/dsh-agent-presets')
     expect(presets?.config).toEqual({ default: 'video' })
   })
+
+  it('turns content search on for the producing-session card', () => {
+    const { rows } = composeShipped()
+    const index = rowOf(rows, 'session-query-sqlite')
+    expect(index?.name).toBe('@deepseek-ai/dsh-session-query-sqlite')
+    expect(index?.config).toEqual({ path: ':memory:', openAt: 'first-search' })
+  })
 })

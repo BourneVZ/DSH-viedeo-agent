@@ -45,7 +45,7 @@ The shipped `video` profile already names this bundle: its template lists `@deep
 
 ### What you get
 
-The layer adds two rows and one override. [`dsh-host-video-project`](../../host/video-project/README.md) serves the authenticated `/api/video` routes; [`dsh-client-ui-video`](../../client/ui-video/README.md) draws the top-bar mode switch and the roster and preview panes; and the `agent-presets` row defaults a newly created session to the `video` preset. Each row's own package owns that row's behavior.
+The layer adds two rows and two overrides. [`dsh-host-video-project`](../../host/video-project/README.md) serves the authenticated `/api/video` routes; [`dsh-client-ui-video`](../../client/ui-video/README.md) draws the top-bar mode switch and the roster and preview panes; the `agent-presets` row defaults a newly created session to the `video` preset; and the `session-query-sqlite` row turns session content search on, which the layers below ship off and the producing-session card needs. Each row's own package owns that row's behavior.
 
 -----
 
@@ -55,15 +55,17 @@ The layer adds two rows and one override. [`dsh-host-video-project`](../../host/
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The bundle is a static patch document: one `insert` list plus one id-targeted override, applied over the empty profile root after `dsh-base` and `dsh-web-app`. It mounts no service, emits no events, and holds no mutable state; each inserted row's package owns that row's behavior and invariants.
+The bundle is a static patch document: one `insert` list plus two id-targeted overrides, applied over the empty profile root after `dsh-base` and `dsh-web-app`. It mounts no service, emits no events, and holds no mutable state; each inserted row's package owns that row's behavior and invariants.
 
-A patch replaces the targeted row's whole `config` rather than merging into it, so the `agent-presets` row restates the single key it owns (`default: video`). The override lands because the loader indexes rows a prior `insert` added, so a later layer can target `agent-presets` by id even though `dsh-web-app` inserted it. The default only fills an unset choice: a session already pinned to a preset keeps it, and a default the user stored through the settings surface still wins over this row. The profile's own `cordis.patch.yml` and any `--patch` overlays apply after this layer.
+A patch replaces the targeted row's whole `config` rather than merging into it, so the `agent-presets` row restates the single key it owns (`default: video`) and the `session-query-sqlite` row restates both keys it owns (`path: ':memory:'` and `openAt: first-search`). The overrides land because the loader indexes rows a prior `insert` added, so a later layer can target `agent-presets` by id even though `dsh-web-app` inserted it. The default only fills an unset choice: a session already pinned to a preset keeps it, and a default the user stored through the settings surface still wins over this row. The profile's own `cordis.patch.yml` and any `--patch` overlays apply after this layer.
+
+Content search is what makes the producing-session card answer at all: matching a project to a session searches session logs, and `dsh-base` and `dsh-web-app` both ship that index closed (`openAt: never`), which fails every search before it runs. `first-search` keeps `node:sqlite` unimported until the first probe and leaves the index ephemeral, so that probe reconciles the whole persisted corpus before answering; a profile that wants it cheaper restates the row with a durable `path`.
 
 ### Source map
 
 | File | Role |
 |---|---|
-| [`cordis.patch.yml`](cordis.patch.yml) | The bundle substance: the two inserted rows and the preset-default override, with per-row rationale |
+| [`cordis.patch.yml`](cordis.patch.yml) | The bundle substance: the two inserted rows and the two overrides, with per-row rationale |
 | [`src/index.ts`](src/index.ts) | Package entry; carries no runtime API |
 | [`tests/video-app.spec.ts`](tests/video-app.spec.ts) | Manifest declaration, insert-row, and three-layer composition checks |
 
@@ -101,7 +103,8 @@ The bundle itself adds no request prefix; each inserted row's package owns any c
 
 These limits tell you when the layer needs care or where an override must go; they are current package constraints, not a task backlog.
 
-- **Overrides replace whole settings blocks.** The `agent-presets` row replaces that row's entire configuration, so a profile that needs other preset settings must restate them in its own patch; nothing merges automatically.
+- **Overrides replace whole settings blocks.** The `agent-presets` and `session-query-sqlite` rows each replace their row's entire configuration, so a profile that needs any other setting from either must restate it in its own patch; nothing merges automatically.
+- **The producing-session card needs content search on.** A later patch layer restating `openAt: never` closes the index again, and every `/api/video/project-session` read then fails with `SESSION_QUERY_SEARCH_DISABLED` instead of answering no match. The first search on this ephemeral index also reconciles every persisted session log it finds.
 - **The preset default only fills an unset choice.** A session already pinned to a preset keeps it, and a default the user stored through the settings surface wins over this row.
 - **In-box, not registry-installable.** `dsh plugin add` resolves against the npm registry and 404s for this unpublished in-box package; activate it by naming it in a profile's bundle list.
 - **It patches over the web layer.** The bundle assumes `dsh-web-app` is already in the profile; naming it without that layer leaves the video rows mounting into a composition that lacks the web connection and workspace services they read.

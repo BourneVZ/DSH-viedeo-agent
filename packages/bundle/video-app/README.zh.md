@@ -45,7 +45,7 @@ kind: "package-bundle"
 
 ### 你得到什么
 
-该层增加两条配置项与一处覆盖。[`dsh-host-video-project`](../../host/video-project/README.zh.md) 提供受认证的 `/api/video` 路由；[`dsh-client-ui-video`](../../client/ui-video/README.zh.md) 绘制顶栏模式切换组件与列表、预览窗格；`agent-presets` 配置项将新建会话默认设为 `video` preset。每条配置项的行为由其各自的包拥有。
+该层增加两条配置项与两处覆盖。[`dsh-host-video-project`](../../host/video-project/README.zh.md) 提供受认证的 `/api/video` 路由；[`dsh-client-ui-video`](../../client/ui-video/README.zh.md) 绘制顶栏模式切换组件与列表、预览窗格；`agent-presets` 配置项将新建会话默认设为 `video` preset；`session-query-sqlite` 配置项打开会话内容搜索——下层交付时它是关闭的，而产出会话卡片需要它。每条配置项的行为由其各自的包拥有。
 
 -----
 
@@ -55,15 +55,17 @@ kind: "package-bundle"
 <details>
 <summary>实现内部——点击展开</summary>
 
-本组合包是一份静态 patch 文档：一个 `insert` 列表加一处按 id 定位的覆盖，在 `dsh-base` 与 `dsh-web-app` 之后叠于空 profile 根之上。它不挂载服务、不发事件、不持有可变状态；每条插入配置项的行为与不变量由其各自的包拥有。
+本组合包是一份静态 patch 文档：一个 `insert` 列表加两处按 id 定位的覆盖，在 `dsh-base` 与 `dsh-web-app` 之后叠于空 profile 根之上。它不挂载服务、不发事件、不持有可变状态；每条插入配置项的行为与不变量由其各自的包拥有。
 
-patch 替换目标配置项的整个 `config` 而非并入，因此 `agent-presets` 配置项重述了它拥有的唯一一个键（`default: video`）。该覆盖之所以生效，是因为加载器会为先前 `insert` 添加的配置项建立索引，故后一层即使面对由 `dsh-web-app` 插入的 `agent-presets`，也能按 id 定位它。默认值只填充未设定的选择：已固定到某 preset 的会话保持原样，而用户通过设置界面存储的默认值仍优先于本配置项。profile 自身的 `cordis.patch.yml` 与任何 `--patch` 叠加层在本层之后应用。
+patch 替换目标配置项的整个 `config` 而非并入，因此 `agent-presets` 配置项重述了它拥有的唯一一个键（`default: video`），而 `session-query-sqlite` 配置项重述了它拥有的两个键（`path: ':memory:'` 与 `openAt: first-search`）。这些覆盖之所以生效，是因为加载器会为先前 `insert` 添加的配置项建立索引，故后一层即使面对由 `dsh-web-app` 插入的 `agent-presets`，也能按 id 定位它。默认值只填充未设定的选择：已固定到某 preset 的会话保持原样，而用户通过设置界面存储的默认值仍优先于本配置项。profile 自身的 `cordis.patch.yml` 与任何 `--patch` 叠加层在本层之后应用。
+
+内容搜索正是让产出会话卡片能够作答的前提：把项目匹配到会话要搜索会话日志，而 `dsh-base` 与 `dsh-web-app` 交付时都关闭该索引（`openAt: never`），这会让每次搜索在运行前就失败。`first-search` 使 `node:sqlite` 在首次探测前不被导入，并让索引保持短暂，因此那次探测会先对账整个已持久化语料再作答；想让它更省事的 profile 可以用一个持久 `path` 重述该配置项。
 
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
-| [`cordis.patch.yml`](cordis.patch.yml) | 组合包实质：两条插入配置项与 preset 默认值覆盖，附逐项理由 |
+| [`cordis.patch.yml`](cordis.patch.yml) | 组合包实质：两条插入配置项与两处覆盖，附逐项理由 |
 | [`src/index.ts`](src/index.ts) | 包入口；不携带运行时 API |
 | [`tests/video-app.spec.ts`](tests/video-app.spec.ts) | manifest 声明、插入配置项与三层合成检查 |
 
@@ -101,7 +103,8 @@ patch 替换目标配置项的整个 `config` 而非并入，因此 `agent-prese
 
 这些限制告诉你该层在何时需要留意、覆盖须落在何处；它们是本包当前的约束，而非任务清单。
 
-- **覆盖替换整个设置块。** `agent-presets` 配置项替换该配置项的全部配置，因此需要其他 preset 设置的 profile 必须在其自身 patch 中重述它们；不会自动合并。
+- **覆盖替换整个设置块。** `agent-presets` 与 `session-query-sqlite` 配置项各自替换其配置项的全部配置，因此需要二者中任何其他设置的 profile 必须在其自身 patch 中重述它；不会自动合并。
+- **产出会话卡片需要内容搜索处于打开状态。** 后一 patch 层若重述 `openAt: never` 会再次关闭索引，届时每次 `/api/video/project-session` 读取都会以 `SESSION_QUERY_SEARCH_DISABLED` 失败，而非回答没有匹配。在这个短暂索引上的首次搜索还会对账它找到的每个已持久化会话日志。
 - **preset 默认值只填充未设定的选择。** 已固定到某 preset 的会话保持原样，而用户通过设置界面存储的默认值优先于本配置项。
 - **内置，而非可从注册表安装。** `dsh plugin add` 针对 npm 注册表解析，对这个未发布的内置包会 404；请通过在 profile 的 bundle 列表中命名它来激活。
 - **它 patch 在 web 层之上。** 本组合包假定 `dsh-web-app` 已在 profile 中；若不含该层就命名它，视频配置项会挂载进一个缺少它们所读取的 web connection 与 workspace 服务的组合。

@@ -20,6 +20,16 @@
     - id: ui-video
       name: '@deepseek-ai/dsh-client-ui-video'
 
+# Telling the user which session produced a project searches session logs, and
+# content search ships off in the layers below (`openAt: never`). This restates
+# the webapp's row with the index opened on the first probe instead, so the
+# producing-session card can answer; the index stays ephemeral, and the first
+# search reconciles it from the persisted logs it finds.
+- id: session-query-sqlite
+  config:
+    path: ':memory:'
+    openAt: first-search
+
 # A session created in this profile composes the video-production agent. The
 # default only fills an unset choice, so a session already pinned to a preset
 # keeps it, and a default the user stored through the settings surface still
