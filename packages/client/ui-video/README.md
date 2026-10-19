@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package adds a video-production mode to the web GUI. Its top-bar switch replaces the default three-column frame with a project roster on the left, a preview in the centre, and the shipped conversation surface on the right in a chat-only posture — the real transcript and one input, without the View tabs, model seat, or composer tool row. The centre toggles between the formatted `script.json` and a player over a ruler, three aligned tracks, and a seekable playhead. Mount it with [`dsh-host-video-project`](../../host/video-project/README.md), which serves the data.
+This package adds a video-production mode to the web GUI. Its top-bar switch replaces the default three-column frame with a project roster on the left, a preview in the centre, and the shipped conversation surface on the right in a chat-only posture — the real transcript and one input, without the View tabs or composer tool row. The centre toggles between the formatted `script.json` and a player over a ruler, three aligned tracks, and a seekable playhead. A composer-dock card offers the session that produced the selection. Mount it with [`dsh-host-video-project`](../../host/video-project/README.md), which serves the data.
 
 ## Table of Contents
 
@@ -35,6 +35,8 @@ The centre pane's top-right toggle switches between two surfaces. **Script** lay
 
 The view follows the project's stage: a project that has only its script opens in **Script**, and one whose render has appeared opens in **Preview**; a manual toggle survives polling until the project moves to a new stage. The right column is the frame's own conversation surface in its chat-only posture — bubble Markdown, collapsible intermediate steps, and one input, without the View tabs, the model seat, or the composer tool row — so a video-production request typed there runs the session's agent preset and renders exactly as it does in the default layout.
 
+Selecting a project also asks the host which session produced it. When one is named, a card appears above that input carrying its title and one button that makes it the conversation's subject; the card never switches on its own, stays hidden while the conversation already is that session, and disappears when you leave the video mode.
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -43,11 +45,11 @@ The view follows the project's stage: a project that has only its script opens i
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The node half is an empty `apply` that keeps the plugin on the host roster; the browser half ships through `exports["./client"]`, discovered by the `dsh.client` declaration in `package.json` (inject `locale`, `ui-layout`, `ui-renderer`; platform `web`).
+The node half is an empty `apply` that keeps the plugin on the host roster; the browser half ships through `exports["./client"]`, discovered by the `dsh.client` declaration in `package.json` (inject `session-controller`, `locale`, `ui-conversation`, `ui-layout`, `ui-renderer`, `ui-session`; platform `web`).
 
-The browser `apply` registers the `video` locale dictionaries, one alternative shell mode through `ctx.layout.registerShellMode`, and two panes on the `shell.mode.pane` keyed slot. The mode spec fixes `columns: '260px minmax(0, 1fr) 400px'` and three panes — `projects`, `preview`, and `{ kind: 'conversation', simple: true }` — so the frame draws the switch and lays the panes out without knowing what a video project is; the `simple` flag re-mounts the frame's own session-maybe surface in its chat-only posture rather than a copy. The label is a thunk resolved per render, so the tab follows the active locale without re-registration.
+The browser `apply` registers the `video` locale dictionaries, one alternative shell mode through `ctx.layout.registerShellMode`, two panes on the `shell.mode.pane` keyed slot, and one card on the `conversation.input.dock` list slot. The mode spec fixes `columns: '260px minmax(0, 1fr) 400px'` and three panes — `projects`, `preview`, and `{ kind: 'conversation', simple: true }` — so the frame draws the switch and lays the panes out without knowing what a video project is; the `simple` flag re-mounts the frame's own session-maybe surface in its chat-only posture rather than a copy. The label is a thunk resolved per render, so the tab follows the active locale without re-registration. Both slots are filled with `ctx.slots.inject` because the frame declares the pane slot only when the mode body first renders and the conversation declares the dock only at session scope.
 
-One `VideoProjectsController` ([`src/client/video-store.ts`](src/client/video-store.ts)) owns the roster, the detail, the view mode, and the decoded-waveform cache the two panes share, so a selection on the left is what the centre renders. It reads the host's `/api/video/*` routes by same-origin `fetch` — the connection layer already authenticated the browser — and polls on an interval because no forwarded event announces a changed `script.json`; an in-flight poll is not doubled up. Each detail load resolves the project's stage and, only when the stage changed, re-drives the view mode, so polling never fights a manual toggle. Waveform peaks are decoded once per audio path through the Web Audio API and cached on the snapshot; a decode that fails caches an empty set, which draws the placeholder bar. The pane slot is filled with `ctx.slots.inject` because the frame declares it only when the mode body first renders.
+One `VideoProjectsController` ([`src/client/video-store.ts`](src/client/video-store.ts)) owns the roster, the detail, the view mode, the producing-session match, and the decoded-waveform cache the panes and the card share, so a selection on the left is what the centre renders and what the card offers. It reads the host's `/api/video/*` routes by same-origin `fetch` — the connection layer already authenticated the browser — and polls on an interval because no forwarded event announces a changed `script.json`; an in-flight poll is not doubled up. Each detail load resolves the project's stage and, only when the stage changed, re-drives the view mode, so polling never fights a manual toggle. The match is asked again on every poll while it is still unknown, because the session that built a project may still be writing the log the host searches; a probe that fails or answers for a project that stopped being selected publishes nothing, and `start()`'s stopper clears the match so the card does not follow you out of the video mode. Waveform peaks are decoded once per audio path through the Web Audio API and cached on the snapshot; a decode that fails caches an empty set, which draws the placeholder bar.
 
 The timeline is pure math over the shots ([`src/client/timeline.ts`](src/client/timeline.ts)): `buildSegments` places each shot by cumulative duration, `rulerTicks` picks a tick step that keeps marks legible at the current zoom, and shared pixel↔second conversions drive the ruler, the three tracks, and the playhead, so they cannot drift apart.
 
@@ -56,8 +58,8 @@ The timeline is pure math over the shots ([`src/client/timeline.ts`](src/client/
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Node half: empty `apply` keeping the plugin on the host roster |
-| [`src/client/index.ts`](src/client/index.ts) | Browser half: locale, shell mode, and the two pane registrations |
-| [`src/client/video-store.ts`](src/client/video-store.ts) | Roster controller, host transport, poll, view mode, and waveform cache |
+| [`src/client/index.ts`](src/client/index.ts) | Browser half: locale, shell mode, the two pane registrations, and the dock card |
+| [`src/client/video-store.ts`](src/client/video-store.ts) | Roster controller, host transport, poll, view mode, session match, and waveform cache |
 | [`src/client/timeline.ts`](src/client/timeline.ts) | Pure segment, ruler-tick, and pixel↔second math |
 | [`src/client/waveform.ts`](src/client/waveform.ts) | PCM-to-peaks reduction and the browser audio decode |
 | [`src/client/VideoProjectsPane.tsx`](src/client/VideoProjectsPane.tsx) | Left roster pane |
@@ -65,6 +67,7 @@ The timeline is pure math over the shots ([`src/client/timeline.ts`](src/client/
 | [`src/client/VideoScriptView.tsx`](src/client/VideoScriptView.tsx) | Formatted `script.json` surface |
 | [`src/client/VideoPlayer.tsx`](src/client/VideoPlayer.tsx) | Rendered `<video>` or the active shot's still and subtitle |
 | [`src/client/VideoTimeline.tsx`](src/client/VideoTimeline.tsx) | Ruler, three tracks, playhead, transport, and zoom control |
+| [`src/client/VideoSessionBanner.tsx`](src/client/VideoSessionBanner.tsx) | Composer-dock card offering the producing session |
 | [`src/client/locales.ts`](src/client/locales.ts) | Bilingual `video` namespace dictionaries |
 
 </details>
@@ -78,7 +81,7 @@ The timeline is pure math over the shots ([`src/client/timeline.ts`](src/client/
 - [`dsh-video-app` bundle](../../bundle/video-app/README.md) — the profile layer that mounts both halves.
 - [`dsh-client-ui-layout`](../ui-layout/README.md) — the shell mode switch, the `simple` conversation pane, and the pane layout this registers into.
 - [`dsh-client-ui-conversation`](../ui-conversation/README.md) — the conversation surface the `simple` flag renders chat-only.
-- [Web client slots](../../../docs/subsystems/slots.md) — the `shell.mode.pane` keyed slot and the slot currency.
+- [Web client slots](../../../docs/subsystems/slots.md) — the `shell.mode.pane` and `conversation.input.dock` slots and the slot currency.
 
 -----
 
@@ -101,6 +104,7 @@ These limits tell you what the surface does not yet do; they are current package
 - **The waveform needs Web Audio.** The audio track decodes each shot's narration through `AudioContext.decodeAudioData`; a shot whose audio is absent, still being written, or undecodable draws a placeholder bar instead.
 - **The roster polls; it is not pushed.** A change an agent writes into a project directory appears on the next five-second poll, not instantly, and only while a video pane is mounted.
 - **The mode needs the layout service.** The switch and panes register against `ctx.layout` and the `shell.mode.pane` slot; a composition without the layout service draws no video mode.
+- **The producing session is offered, never imposed.** The card names the session the host matched by searching session logs, so a project no retained log references shows no card, and one click is the only way the conversation changes.
 
 <a id="dev-note"></a>
 ### Dev Note

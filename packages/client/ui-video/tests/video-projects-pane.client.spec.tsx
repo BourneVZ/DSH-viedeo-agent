@@ -55,6 +55,7 @@ function props(
     detailError: null,
     viewMode: 'script',
     peaks: {},
+    sessionMatch: null,
     ...state,
   }
   function useVideoProjects<S>(select: (s: VideoProjectsState) => S): S {

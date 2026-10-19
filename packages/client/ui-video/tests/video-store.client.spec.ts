@@ -2,13 +2,14 @@
 /**
  * The video roster controller: reply validation at the wire boundary, the
  * same-origin transport, the media URL builder, and the poll that keeps the
- * two panes current.
+ * panes and the producing-session match current.
  */
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { VideoProject, VideoProjectSummary, VideoShot } from '@deepseek-ai/dsh-host-video-project/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
-  browserJsonFetch, POLL_INTERVAL_MS, readProjectDetail, readProjectList, videoMediaUrl,
-  VideoProjectsController, WAVEFORM_BUCKETS, type VideoJsonFetch,
+  browserJsonFetch, POLL_INTERVAL_MS, readProjectDetail, readProjectList, readProjectSession,
+  videoMediaUrl, VideoProjectsController, WAVEFORM_BUCKETS, type VideoJsonFetch,
 } from '../src/client/video-store.ts'
 
 /** One discovered project as the list route reports it. */
@@ -40,6 +41,9 @@ const RENDERED: VideoProject = { ...DETAIL, hasRender: true, render: '/work/demo
 
 /** The same project with no shots yet: the empty stage. */
 const EMPTY: VideoProject = { ...DETAIL, shots: [] }
+
+/** The session the match route reports as the producer of {@link SUMMARY}. */
+const SESSION = 'sess-1' as SessionId
 
 afterEach(() => {
   vi.useRealTimers()
@@ -80,6 +84,19 @@ describe('reply validation', () => {
     expect(() => readProjectDetail({ error: 'missing path' }))
       .toThrow('video: /api/video/project answered without a project object')
   })
+
+  it('reads the matched session id', () => {
+    expect(readProjectSession({ sessionId: SESSION })).toBe(SESSION)
+  })
+
+  it('reads a project no session references as no match', () => {
+    expect(readProjectSession({ sessionId: null })).toBeNull()
+  })
+
+  it('rejects a match reply carrying no sessionId', () => {
+    expect(() => readProjectSession({ error: 'unknown video project' }))
+      .toThrow('video: /api/video/project-session answered without a sessionId')
+  })
 })
 
 describe('browserJsonFetch', () => {
@@ -103,10 +120,13 @@ describe('browserJsonFetch', () => {
 })
 
 describe('VideoProjectsController', () => {
-  /** A transport answering both routes from fixed documents. */
-  function reader(detail: VideoProject = DETAIL): Mock<VideoJsonFetch> {
-    return vi.fn<VideoJsonFetch>(async (path: string) =>
-      path === '/api/video/projects' ? { projects: [SUMMARY] } : { project: detail })
+  /** A transport answering the list, detail, and match routes from fixed documents. */
+  function reader(detail: VideoProject = DETAIL, sessionId: string | null = SESSION): Mock<VideoJsonFetch> {
+    return vi.fn<VideoJsonFetch>(async (path: string) => {
+      if (path === '/api/video/projects') return { projects: [SUMMARY] }
+      if (path.startsWith('/api/video/project-session')) return { sessionId }
+      return { project: detail }
+    })
   }
 
   /** A transport answering an empty roster, so no project auto-selects. */
@@ -213,7 +233,7 @@ describe('VideoProjectsController', () => {
     await controller.select('/work/demo')
     await controller.select(null)
     expect(controller.store.getSnapshot()).toMatchObject({
-      selected: null, detailStatus: 'idle', project: null, detailError: null,
+      selected: null, detailStatus: 'idle', project: null, detailError: null, sessionMatch: null,
     })
   })
 
@@ -262,6 +282,88 @@ describe('VideoProjectsController', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(controller.store.getSnapshot().viewMode).toBe('preview')
     stop()
+  })
+
+  describe('producing session', () => {
+    /** The match-route calls one transport made. */
+    function probes(read: Mock<VideoJsonFetch>) {
+      return read.mock.calls.filter(([path]) => path.startsWith('/api/video/project-session'))
+    }
+
+    it('publishes the session the host matched for the selection', async () => {
+      const read = reader()
+      const controller = new VideoProjectsController(read)
+      await controller.select('/work/demo')
+      expect(read).toHaveBeenCalledWith(
+        '/api/video/project-session?path=%2Fwork%2Fdemo', expect.any(AbortSignal))
+      expect(controller.store.getSnapshot().sessionMatch).toBe(SESSION)
+    })
+
+    it('publishes the match for the project the first poll auto-selects', async () => {
+      const controller = new VideoProjectsController(reader())
+      const stop = controller.start()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(controller.store.getSnapshot().sessionMatch).toBe(SESSION)
+      stop()
+    })
+
+    it('asks again while no session matched, and stops once one answers', async () => {
+      let matched: string | null = null
+      const read = vi.fn<VideoJsonFetch>(async (path: string) => {
+        if (path === '/api/video/projects') return { projects: [SUMMARY] }
+        if (path.startsWith('/api/video/project-session')) {
+          const answer = matched
+          matched = SESSION
+          return { sessionId: answer }
+        }
+        return { project: DETAIL }
+      })
+      const controller = new VideoProjectsController(read)
+      const stop = controller.start()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(controller.store.getSnapshot().sessionMatch).toBeNull()
+      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
+      expect(controller.store.getSnapshot().sessionMatch).toBe(SESSION)
+      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
+      expect(probes(read)).toHaveLength(2)
+      stop()
+    })
+
+    it('drops an answer whose project stopped being selected', async () => {
+      let release: () => void = () => {}
+      const gate = new Promise<void>((resolve) => { release = resolve })
+      const read = vi.fn<VideoJsonFetch>(async (path: string) => {
+        if (path === '/api/video/projects') return { projects: [] }
+        if (path.startsWith('/api/video/project-session')) {
+          await gate
+          return { sessionId: path.endsWith('%2Fa') ? 'sess-a' : 'sess-b' }
+        }
+        return { project: DETAIL }
+      })
+      const controller = new VideoProjectsController(read)
+      const first = controller.select('/a')
+      const second = controller.select('/b')
+      release()
+      await Promise.all([first, second])
+      expect(controller.store.getSnapshot().sessionMatch).toBe('sess-b')
+    })
+
+    it('leaves the match unknown when the probe fails', async () => {
+      const controller = new VideoProjectsController(failing(new Error('offline')))
+      await controller.select('/work/demo')
+      expect(controller.store.getSnapshot()).toMatchObject({
+        sessionMatch: null, detailStatus: 'error', detailError: 'offline',
+      })
+    })
+
+    it('clears the match when the video pane unmounts', async () => {
+      const controller = new VideoProjectsController(reader())
+      await controller.select('/work/demo')
+      expect(controller.store.getSnapshot().sessionMatch).toBe(SESSION)
+      const stop = controller.start()
+      stop()
+      expect(controller.store.getSnapshot().sessionMatch).toBeNull()
+    })
   })
 
   describe('waveform peaks', () => {

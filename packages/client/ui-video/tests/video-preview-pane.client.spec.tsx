@@ -25,6 +25,7 @@ function props(state: Partial<VideoProjectsState>, over: Partial<VideoPreviewPan
   const snapshot: VideoProjectsState = {
     listStatus: 'ready', projects: [], listError: null, selected: null,
     detailStatus: 'idle', project: null, detailError: null, viewMode: 'script', peaks: {},
+    sessionMatch: null,
     ...state,
   }
   function useVideoProjects<S>(select: (s: VideoProjectsState) => S): S {

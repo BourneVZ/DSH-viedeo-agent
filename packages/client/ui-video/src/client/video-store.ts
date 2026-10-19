@@ -1,7 +1,7 @@
 /**
  * Video-project roster controller: the project list, the selected project's
- * resolved shot timeline, and the poll that keeps both current while an agent
- * works.
+ * resolved shot timeline, the session that produced it, and the poll that keeps
+ * all three current while an agent works.
  *
  * The data arrives over this package's own host half (`/api/video/*`), which
  * the connection layer has already authenticated for the browser, so a
@@ -12,8 +12,10 @@
  * anything the browser is told about.
  */
 
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { VideoProject, VideoProjectSummary } from '@deepseek-ai/dsh-host-video-project/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { decodePeaks } from './waveform.ts'
 
 /** Milliseconds between two roster polls while a video pane is mounted. */
@@ -37,7 +39,7 @@ type VideoStage = 'empty' | 'script' | 'render'
  */
 export type VideoJsonFetch = (path: string, signal: AbortSignal) => Promise<unknown>
 
-/** Roster and detail snapshot the two video panes render. */
+/** Roster, detail, and producing-session snapshot the video panes render. */
 export interface VideoProjectsState {
   /** List-load phase; `idle` until the first poll answers. */
   listStatus: 'idle' | 'loading' | 'ready' | 'error'
@@ -57,6 +59,8 @@ export interface VideoProjectsState {
   viewMode: VideoViewMode
   /** Decoded waveform peaks keyed by the audio's absolute host path. */
   peaks: Readonly<Record<string, readonly number[]>>
+  /** Session whose log references the selected project, or null while unknown. */
+  sessionMatch: SessionId | null
 }
 
 const INITIAL: VideoProjectsState = {
@@ -69,6 +73,7 @@ const INITIAL: VideoProjectsState = {
   detailError: null,
   viewMode: 'script',
   peaks: {},
+  sessionMatch: null,
 }
 
 /**
@@ -144,8 +149,24 @@ export function readProjectDetail(body: unknown): VideoProject {
 }
 
 /**
- * Reads the roster and one selected project, and keeps both current by
- * polling for as long as a video pane is mounted.
+ * Read the producing-session reply. The route answers `null` for a project no
+ * session references, so absence and a match share one member.
+ * @param body - the decoded `/api/video/project-session` reply.
+ * @returns the matched session's id, or null when no session references the project.
+ * @throws when the reply carries no `sessionId` string or null.
+ */
+export function readProjectSession(body: unknown): SessionId | null {
+  const sessionId = readMember(body, 'sessionId')
+  if (sessionId === null) return null
+  if (typeof sessionId !== 'string') {
+    throw new Error('video: /api/video/project-session answered without a sessionId')
+  }
+  return brandString<SessionId>(sessionId)
+}
+
+/**
+ * Reads the roster, one selected project, and the session that produced it,
+ * and keeps all three current by polling for as long as a video pane is mounted.
  */
 export class VideoProjectsController {
   /** Snapshot the two panes subscribe to. */
@@ -202,6 +223,27 @@ export class VideoProjectsController {
   }
 
   /**
+   * Ask the host which session produced one project and publish the answer.
+   *
+   * A probe that fails, and one whose project stopped being selected while it
+   * was in flight, publishes nothing: no match and no answer are the same state
+   * here, the banner stays hidden, and the next poll asks again.
+   * @param path - absolute project path.
+   * @param signal - aborts the read when the polling pane unmounts.
+   * @returns once the answer is published or dropped.
+   */
+  async #loadSessionMatch(path: string, signal: AbortSignal): Promise<void> {
+    try {
+      const sessionId = readProjectSession(
+        await this.read(`/api/video/project-session?path=${encodeURIComponent(path)}`, signal))
+      if (this.store.getSnapshot().selected !== path) return
+      this.#set({ sessionMatch: sessionId })
+    } catch {
+      /* Transport failure or a foreign reply body: no match to show. */
+    }
+  }
+
+  /**
    * Resolve the view switch a freshly loaded project asks for. A project that
    * has moved to a new stage takes the mode that stage defaults to — a render
    * shows the player, anything short of one shows the script — while a project
@@ -219,8 +261,8 @@ export class VideoProjectsController {
   }
 
   /**
-   * Read the list and, when one is selected, its detail.
-   * @param signal - aborts both reads when the polling pane unmounts.
+   * Read the list and, when one is selected, its detail and producing session.
+   * @param signal - aborts the reads when the polling pane unmounts.
    * @returns once the snapshot reflects the answers or their failures.
    */
   async #poll(signal: AbortSignal): Promise<void> {
@@ -238,25 +280,30 @@ export class VideoProjectsController {
       if (target === null) return
       if (target !== selected) {
         this.#stage = null
-        this.#set({ selected: target, detailStatus: 'idle', project: null, detailError: null })
+        this.#set({ selected: target, detailStatus: 'idle', project: null, detailError: null, sessionMatch: null })
       }
       await this.#loadDetail(target, signal)
+      // The session that built a project may still be writing the log the match
+      // reads, so an unmatched project is asked again on every poll.
+      if (this.store.getSnapshot().sessionMatch === null) await this.#loadSessionMatch(target, signal)
     } finally {
       this.#polling = false
     }
   }
 
   /**
-   * Select one project for the preview pane and read it.
+   * Select one project for the preview pane, read it, and find its session.
    * @param path - absolute project path, or null to show nothing.
    * @returns once the snapshot reflects the answer or its failure.
    */
   async select(path: string | null): Promise<void> {
     if (this.store.getSnapshot().selected === path) return
     this.#stage = null
-    this.#set({ selected: path, detailStatus: 'idle', project: null, detailError: null })
+    this.#set({ selected: path, detailStatus: 'idle', project: null, detailError: null, sessionMatch: null })
     if (path === null) return
-    await this.#loadDetail(path, new AbortController().signal)
+    const signal = new AbortController().signal
+    await this.#loadDetail(path, signal)
+    await this.#loadSessionMatch(path, signal)
   }
 
   /**
@@ -295,7 +342,7 @@ export class VideoProjectsController {
    * Start keeping the roster current: one read now, then one per interval,
    * until the returned stopper runs. Called from the projects pane's mount,
    * which is the pane's whole lifetime inside the video shell mode.
-   * @returns the stopper clearing the interval.
+   * @returns the stopper clearing the interval and the session match.
    */
   start(): () => void {
     const controller = new AbortController()
@@ -304,6 +351,9 @@ export class VideoProjectsController {
     return () => {
       clearInterval(timer)
       controller.abort()
+      // The match belongs to this shell mode's selection: dropping it on the way
+      // out keeps the banner off the conversation the user returns to.
+      this.#set({ sessionMatch: null })
     }
   }
 }

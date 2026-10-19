@@ -12,13 +12,25 @@
       "path": "../../../vendor/cordis"
     },
     {
+      "path": "../../api/session-controller/tsconfig.client.json"
+    },
+    {
+      "path": "../../core/session"
+    },
+    {
       "path": "../../host/video-project"
+    },
+    {
+      "path": "../../util/brand"
     },
     {
       "path": "../locale"
     },
     {
       "path": "../store"
+    },
+    {
+      "path": "../ui-conversation"
     },
     {
       "path": "../ui-layout"
@@ -28,6 +40,9 @@
     },
     {
       "path": "../ui-renderer"
+    },
+    {
+      "path": "../ui-session"
     },
     {
       "path": "../ui-slots"

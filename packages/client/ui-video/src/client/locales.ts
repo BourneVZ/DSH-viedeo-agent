@@ -53,6 +53,8 @@ export const zh = {
   'timeline.zoomOut': '缩小',
   'timeline.playheadAria': '播放头',
   'timeline.audioMissing': '无音频',
+  'session.found': '该项目由会话「{title}」产出',
+  'session.open': '打开该会话',
 } as const
 
 /** English dictionary, key-identical to the Chinese source of truth. */
@@ -105,6 +107,8 @@ export const en: Record<VideoKey, string> = {
   'timeline.zoomOut': 'Zoom out',
   'timeline.playheadAria': 'Playhead',
   'timeline.audioMissing': 'No audio',
+  'session.found': 'Session “{title}” produced this project',
+  'session.open': 'Open that session',
 }
 
 /** Key domain of the `video` namespace (zh is the source of truth). */

@@ -12,7 +12,9 @@
  *
  * The two panes this package registers share one roster controller, so a
  * selection made on the left is what the centre renders and one poll keeps
- * both current while an agent writes into the project directory.
+ * both current while an agent writes into the project directory. The same
+ * controller carries the session that produced the selection to a card in the
+ * conversation's composer dock, which offers the switch rather than making it.
  */
 
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
@@ -22,8 +24,15 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // Type-only: pulls the layout service merge (ctx.layout) and the mode contract.
 import type { ShellModeSpec } from '@deepseek-ai/dsh-client-ui-layout/client'
+// Type-only: pulls the input-dock slot declaration and its owner props.
+import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+// Type-only: pulls the Session standard hooks the banner reads (useSessions, sessionId).
+import type {} from '@deepseek-ai/dsh-client-ui-session/client'
+// Type-only: pulls the sessions service merge (ctx.sessions) and its list rows.
+import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import { VideoPreviewPane, type VideoPreviewPaneInjected } from './VideoPreviewPane.tsx'
 import { VideoProjectsPane, type VideoProjectsPaneInjected } from './VideoProjectsPane.tsx'
+import { VideoSessionBanner, type VideoSessionBannerInjected } from './VideoSessionBanner.tsx'
 import { VideoProjectsController } from './video-store.ts'
 import { en, NS, zh, type VideoKey } from './locales.ts'
 
@@ -36,6 +45,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 export type { VideoPreviewPaneInjected, VideoPreviewPaneProps } from './VideoPreviewPane.tsx'
 export type { VideoProjectsPaneInjected, VideoProjectsPaneProps } from './VideoProjectsPane.tsx'
+export type { VideoSessionBannerInjected, VideoSessionBannerProps } from './VideoSessionBanner.tsx'
 export type { VideoProjectsState } from './video-store.ts'
 export {
   browserJsonFetch, POLL_INTERVAL_MS, readProjectDetail, readProjectList, videoMediaUrl,
@@ -43,7 +53,7 @@ export {
 } from './video-store.ts'
 
 /** Required services (cordis fiber inject). */
-export const inject = ['slots', 'locale', 'layout']
+export const inject = ['slots', 'locale', 'layout', 'sessions']
 
 /**
  * Register the video shell mode and its two panes.
@@ -99,4 +109,19 @@ export function apply(ctx: ClientContext): void {
       inject: previewInjected,
     }, VideoPreviewPane),
   ])
+
+  const bannerInjected = (): VideoSessionBannerInjected => ({
+    hooks: { videoProjects: projects.store },
+    openSession: (id) => { ctx.sessions.open(id) },
+  })
+
+  // The dock is declared by the conversation's input zone, so this row waits for
+  // that declaration and leaves with this plugin's fiber.
+  ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({
+    name: 'conversation.input.dock',
+    id: 'video-session',
+    order: 20,
+    locale: NS,
+    inject: bannerInjected,
+  }, VideoSessionBanner))
 }

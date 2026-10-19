@@ -1,10 +1,10 @@
 /**
- * ui-video plugin halves: the browser entry's dictionary, shell-mode, and pane
- * registrations against the real SlotRegistry (with fiber teardown proving
- * removal — HMR safety), and the inert node entry.
+ * ui-video plugin halves: the browser entry's dictionary, shell-mode, pane, and
+ * composer-dock registrations against the real SlotRegistry (with fiber teardown
+ * proving removal — HMR safety), and the inert node entry.
  */
 import { Context } from '@deepseek-ai/cordis'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi, type Mock } from 'vitest'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { stubSettingsScope } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as applyLocale, inject as localeInject } from '@deepseek-ai/dsh-client-locale/client'
@@ -21,12 +21,14 @@ interface Bench {
   fiber: ReturnType<Context['plugin']>
   /** Modes currently contributed through ctx.layout. */
   modes: ShellModeSpec[]
+  /** The fake sessions face the banner switches through. */
+  sessions: { open: Mock }
 }
 
 /**
  * Boot the browser half over a real slot tree that already declares the pane
- * seat, so the plugin's two pane rows register synchronously.
- * @returns the context, its fiber, and the collected shell modes.
+ * seat and the composer dock, so the plugin's rows register synchronously.
+ * @returns the context, its fiber, the collected shell modes, and the sessions face.
  */
 async function bench(): Promise<Bench> {
   const ctx = new Context()
@@ -35,6 +37,7 @@ async function bench(): Promise<Bench> {
     name: 'root',
     children: {
       'shell.mode.pane': { kind: 'keyed', scope: 'root' },
+      'conversation.input.dock': { kind: 'list', scope: 'session' },
     },
   } as never, () => null)
   const modes: ShellModeSpec[] = []
@@ -50,6 +53,8 @@ async function bench(): Promise<Bench> {
     },
   }
   ctx.provide('layout', layout)
+  const sessions = { open: vi.fn() }
+  ctx.provide('sessions', sessions as never)
   // The locale plugin binds a settings scope, which reads the connection handle
   // and the forwarded-event port.
   ctx.provide('connection', { api: { settings: {} }, isLoopback: false } as never)
@@ -62,12 +67,34 @@ async function bench(): Promise<Bench> {
   ctx.locale.setLocale('zh')
   const fiber = ctx.plugin({ inject: [...inject], apply })
   await fiber.await()
-  return { ctx, fiber, modes }
+  return { ctx, fiber, modes, sessions }
 }
 
 /** Registered pane keys, in registration order. */
 function paneKeys(ctx: Context): (string | undefined)[] {
   return ctx.slots.entries('shell.mode.pane').map(entry => entry.options.key)
+}
+
+/** Registered composer-dock entry ids, in registration order. */
+function dockIds(ctx: Context): (string | undefined)[] {
+  return ctx.slots.entries('conversation.input.dock').map(entry => entry.options.id)
+}
+
+/**
+ * Build one registered entry's inject face.
+ * @param ctx - the booted browser context.
+ * @param name - the slot the entry was registered under.
+ * @param id - the entry's dispatch key or list id.
+ * @returns the face the renderer would hand that entry's component.
+ */
+function faceOf(ctx: Context, name: 'shell.mode.pane' | 'conversation.input.dock', id: string): Record<string, unknown> {
+  const entry = ctx.slots.entries(name)
+    .find(candidate => candidate.options.key === id || candidate.options.id === id)
+  if (entry?.inject === undefined) throw new Error(`no inject face for ${id}`)
+  // The two slots scope their inject differently, so the union's parameter
+  // collapses; a root-scoped entry simply ignores the value.
+  const inject = entry.inject as (scope: unknown) => unknown
+  return inject('s1') as Record<string, unknown>
 }
 
 /**
@@ -83,7 +110,7 @@ function onlyMode(modes: readonly ShellModeSpec[]): ShellModeSpec {
 
 describe('ui-video browser half', () => {
   it('declares the services it binds', () => {
-    expect(inject).toEqual(['slots', 'locale', 'layout'])
+    expect(inject).toEqual(['slots', 'locale', 'layout', 'sessions'])
   })
 
   it('contributes one shell mode, and fiber teardown withdraws it (HMR safety)', async () => {
@@ -120,13 +147,8 @@ describe('ui-video browser half', () => {
 
   it('forwards both panes into the one controller they share', async () => {
     const { ctx } = await bench()
-    const face = (key: string): Record<string, unknown> => {
-      const entry = ctx.slots.entries('shell.mode.pane').find(candidate => candidate.options.key === key)
-      if (entry?.inject === undefined) throw new Error(`no inject face for ${key}`)
-      return entry.inject()
-    }
-    const projects = face('projects')
-    const preview = face('preview')
+    const projects = faceOf(ctx, 'shell.mode.pane', 'projects')
+    const preview = faceOf(ctx, 'shell.mode.pane', 'preview')
 
     // The preview face's view switch lands on the store the projects face reads,
     // which is the whole point of routing both through one controller.
@@ -140,6 +162,28 @@ describe('ui-video browser half', () => {
     ;(projects.select as (path: string) => void)('/work/demo')
     ;(preview.ensurePeaks as (key: string, url: string) => void)('/work/demo/a.wav', 'video://a')
     stop()
+  })
+
+  it('registers the producing-session card in the composer dock, and fiber teardown removes it', async () => {
+    const { ctx, fiber } = await bench()
+    expect(dockIds(ctx)).toEqual(['video-session'])
+    await fiber.dispose()
+    expect(dockIds(ctx)).toEqual([])
+  })
+
+  it('gives the dock card the roster store and the session switch', async () => {
+    const { ctx, sessions } = await bench()
+    const banner = faceOf(ctx, 'conversation.input.dock', 'video-session')
+    const projects = faceOf(ctx, 'shell.mode.pane', 'projects')
+
+    // One controller behind both: the card offers the session the same selection
+    // resolved, so they cannot disagree about which project is on screen.
+    const bannerHooks = banner.hooks as { videoProjects: unknown }
+    const paneHooks = projects.hooks as { videoProjects: unknown }
+    expect(bannerHooks.videoProjects).toBe(paneHooks.videoProjects)
+
+    ;(banner.openSession as (id: string) => void)('sess-1')
+    expect(sessions.open).toHaveBeenCalledWith('sess-1')
   })
 
   it('registers the dictionary under its own namespace and releases it with the fiber', async () => {
@@ -162,6 +206,6 @@ describe('ui-video browser half', () => {
 describe('ui-video node half', () => {
   it('contributes no host behavior', () => {
     // The node half exists only so the plugin appears in the Loader tree.
-    expect(applyNode).not.toThrow()
+    expect(() => { applyNode() }).not.toThrow()
   })
 })
