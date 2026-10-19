@@ -14,11 +14,11 @@ web GUI 获得一个替代 shell 模式的扩展点，视频界面则在其上�
 
 `dsh-client-ui-layout` 拥有该机制：功能插件通过 `ctx.layout.registerShellMode` 注册一个 `ShellModeSpec`，框架在默认布局旁绘制顶栏切换组件，并在某模式被选中时用该 spec 自身的窗格行替换三栏网格。框架不认识任何具体功能。spec 的窗格要么是 `{ kind: 'conversation' }`——在模式选定位置重新渲染框架自身的 `conversation` slot，并可选 `simple: true` 以采用纯聊天姿态，去掉视图标签页、模型席位、输入器工具行与头部角落席位，只保留转录与一个输入框——要么是 `{ kind: 'pane'; pane: <key> }`——分派进一个新的 root 作用域 keyed slot `shell.mode.pane`。复用 `conversation` slot 是关键选择：视频模式借此保留真实的会话头部、转录与输入器——气泡 Markdown、可折叠中间步骤，以及运行该会话 agent preset 的输入器——而非功能插件须自行维护的副本。
 
-`dsh-host-video-project` 是数据面：它在已注册工作区下发现每个含 `script.json` 的目录，并提供 `/api/video` 下三条受认证路由（项目列表、单个项目已解析的分镜时间轴、支持 Range 的媒体字节）。它不注册 Cordis 服务，也不注册面向模型的工具；浏览器半侧是其唯一消费者。
+`dsh-host-video-project` 是数据面：它在已注册工作区下发现每个含 `script.json` 的目录，并提供 `/api/video` 下四条受认证路由（项目列表、单个项目已解析的分镜时间轴、支持 Range 的媒体字节，以及产出某个项目的会话）。它不注册 Cordis 服务，也不注册面向模型的工具；浏览器半侧是其唯一消费者。
 
-`dsh-client-ui-video` 是浏览器半侧：它注册 `video` shell 模式、`shell.mode.pane` 上的 `projects` 与 `preview` 窗格，以及 `video` 语言命名空间。一个 roster 控制器每五秒轮询宿主一次，因为没有转发事件会通告 `script.json` 的变化。中间窗格在格式化的 `script.json` 与一个播放器之间切换，播放器带有刻度尺与三条对齐的轨道——字幕、画面缩略图与已解码的音频波形——以及一个共享的可 seek 播放头与缩放控件；已渲染的项目播放其最新的 `.mp4`，未渲染的项目则在分镜片段上运行一个虚拟时钟。视图跟随项目的阶段，因此只有脚本的项目以脚本打开，渲染已出现的项目以播放器打开。
+`dsh-client-ui-video` 是浏览器半侧：它注册 `video` shell 模式、`shell.mode.pane` 上的 `projects` 与 `preview` 窗格、对话的 `conversation.input.dock` slot 上的一张产出会话卡片，以及 `video` 语言命名空间。一个 roster 控制器每五秒轮询宿主一次，因为没有转发事件会通告 `script.json` 的变化。中间窗格在格式化的 `script.json` 与一个播放器之间切换，播放器带有刻度尺与三条对齐的轨道——字幕、画面缩略图与已解码的音频波形——以及一个共享的可 seek 播放头与缩放控件；已渲染的项目播放其最新的 `.mp4`，未渲染的项目则在分镜片段上运行一个虚拟时钟。视图跟随项目的阶段，因此只有脚本的项目以脚本打开，渲染已出现的项目以播放器打开。dock 卡片提供产出该选中项目的会话，且只在一次点击时切换；其匹配机制见[产出会话笔记](../architecture/2026-10-19-video-project-producing-session-match.zh.md)。
 
-`dsh-video-app` 是组合包：一个叠在 `dsh-web-app` 之上的 `dsh.bundle.patch` 层，插入两条视频配置项并把 `agent-presets` 配置项的 `default` 覆盖为 `video`。已发布的 `video` profile 模板按顺序命名 `dsh-base`、`dsh-web-app` 与 `dsh-video-app`，因此 `dsh --profile video` 无需额外步骤即激活该界面。
+`dsh-video-app` 是组合包：一个叠在 `dsh-web-app` 之上的 `dsh.bundle.patch` 层，插入两条视频配置项、把 `agent-presets` 配置项的 `default` 覆盖为 `video`，并打开产出会话匹配所读取的 `session-query-sqlite` 内容搜索索引。已发布的 `video` profile 模板按顺序命名 `dsh-base`、`dsh-web-app` 与 `dsh-video-app`，因此 `dsh --profile video` 无需额外步骤即激活该界面。
 
 ### 包拓扑
 
