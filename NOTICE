@@ -1,0 +1,124 @@
+NOTICE
+
+AI Video-Production Agent — provenance, attribution, and license map
+
+This file records where the code in this repository comes from and under what
+terms each part is offered. It grants no rights of its own; LICENSE holds the
+terms that apply to the work.
+
+This repository is an independent project. It is not a DeepSeek product, is not
+maintained by DeepSeek, and is not affiliated with, sponsored, or endorsed by
+DeepSeek.
+
+
+1. Harness base — MIT, DeepSeek
+
+   Most of this repository is a copy of DeepSeek Harness (`dsh`), an open-source
+   agent harness developed by DeepSeek AI.
+
+     Copyright (c) 2026 DeepSeek
+     MIT license; the full text is in LICENSE, kept verbatim from the base.
+
+   Paths covered: every package under packages/ except the additions in
+   section 4, plus apps/, benchmarks/, docs/, scripts/, snapshots/, website/,
+   python/, .agents/, and the root documents.
+
+   "DeepSeek" and "DeepSeek Harness" are marks of DeepSeek. They appear here
+   only to identify the project this work builds on, in the descriptive way
+   BRAND_GUIDELINES.md permits.
+
+
+2. Vendored framework source — MIT
+
+   vendor/ holds source copies of the Cordis framework and its foundation
+   libraries, rescoped to the @deepseek-ai namespace and built from this
+   checkout rather than installed from npm. Each directory keeps its upstream
+   LICENSE file. vendor/README.md records the pinned upstream commit and every
+   local modification, package by package.
+
+
+3. First-party native package — BSD-3-Clause
+
+   native/system/ (@deepseek-ai/node-addon-system) is offered under the 3-Clause
+   BSD license; see native/system/LICENSE.
+
+
+4. Additions original to this repository
+
+   The video-production layer is written for this repository and is offered on
+   the same MIT terms as the base. Copyright in these files belongs to the
+   authors recorded in `git log`.
+
+     packages/host/video-project/                  the four /api/video routes
+     packages/client/ui-video/                     the video workbench
+     packages/bundle/video-app/                    the video profile layer
+     packages/preset/agent-presets/presets/video/  the three-phase agent persona
+     packages/web/tool-hyperframes/                video_lint, video_snapshot, video_render
+     packages/web/tool-image-gen/                  generate_image
+     packages/web/tool-tts/                        generate_speech
+
+   Add one explicit copyright line here when the project names a holder.
+
+
+5. Modifications to base-owned files
+
+   Base files were edited where the video layer needed an extension point:
+
+     packages/client/ui-layout/                    shell modes and the pane slot
+     packages/client/ui-conversation/              the simple conversation variant
+     packages/client/ui-slots/                     slot contribution
+     packages/client/locale/                       workbench strings in both locales
+     packages/boot/app-boot/src/profile.ts         the video profile
+     packages/bundle/base/                         profile-layer wiring
+     packages/credentials/credentials/             key lookup for the media tools
+     packages/preset/agent-presets/                shipped preset root assertions
+     packages/experimental/tool-hyperframes/       manifest for the moved package
+     packages/extensions/cordis-client-runner/     regenerated slot catalog
+     apps/cli/                                     composition map, manifest, tests
+     python/sdk-runtime/, tsconfig.*.json, pnpm-workspace.yaml, pnpm-lock.yaml
+     scripts/gen-tool-catalog.ts, scripts/verify-cordis-config.ts,
+     scripts/verify-package-readme-model-experience.ts, THIRD_PARTY_NOTICES.md
+     docs/config-catalog.md, docs/tool-catalog.md, docs/subsystems/slots.md
+
+   `git log` is the complete record. MIT imposes no disclosure duty on these
+   edits; they are listed so a reader can tell harness behavior apart from
+   behavior added here.
+
+
+6. Third-party dependencies
+
+   THIRD_PARTY_NOTICES.md names every dependency declared by a workspace
+   manifest with its license, the vendored source, the two pnpm patches applied
+   at install time, and the development-only tier. The file is generated:
+
+     pnpm run gen-third-party-notices       rewrite it
+     pnpm run verify-third-party-notices    fail when it is stale
+
+   pnpm-lock.yaml pins the whole transitive closure by exact version, and
+   `pnpm licenses list` prints the license of every installed package.
+
+   pnpm run verify-dsh-package-licenses checks that every @deepseek-ai/dsh*
+   manifest, including this repository's additions, declares "license": "MIT".
+
+   Two facts about distribution:
+
+   - hyperframes (Apache-2.0, github.com/heygen-com/hyperframes) backs
+     video_lint, video_snapshot, and video_render. The installed package carries
+     no NOTICE file, so Apache-2.0 section 4(d) adds nothing to forward; the
+     license text still has to travel with any artifact that bundles the package.
+   - The web build copies assets from katex/dist into apps/web/dist/assets/,
+     including its font files, without carrying the package's license text.
+     katex declares MIT, "Copyright (c) 2013-2020 Khan Academy and other
+     contributors".
+
+   Both gaps are open. Closing them, and the review each one needs before a
+   public release, is recorded in
+   .agents/notes/proposed/process/2026-10-20-fork-attribution-and-license-map.md.
+
+
+7. Warranty
+
+   The software is provided as is, without warranty of any kind, as LICENSE
+   states. SAFETY.md describes what an agent run can reach on your machine, and
+   the Safety section of README.md states which third-party services receive
+   your content and what you owe when you publish the result.
